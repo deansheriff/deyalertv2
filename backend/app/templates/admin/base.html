@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dey Alert Admin</title>
+<style>
+:root{--bg:#0A0C0A;--card:#141714;--line:#3A413A;--text:#F2F5F3;--muted:#B4BCB4;--lime:#A6EF1F;--ink:#0A0C0A;--red:#FF3B30}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif}
+a{color:inherit}
+.app{display:flex;min-height:100vh}
+nav{width:232px;flex:none;padding:20px 14px;border-right:1px solid var(--line)}
+nav .brand{font-size:20px;font-weight:700;margin:0 8px 20px}
+nav a{display:block;padding:10px 14px;border-radius:999px;text-decoration:none;color:var(--muted);margin-bottom:4px}
+nav a.on{background:var(--lime);color:var(--ink);font-weight:600}
+main{flex:1;min-width:0;padding:28px 32px}
+h1{font-size:28px;letter-spacing:-.02em;margin:0 0 18px}
+h2{font-size:16px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.stat b{display:block;font-size:30px;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+th{color:var(--muted);text-align:left;font-weight:600;font-size:12px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.btn{display:inline-block;padding:9px 18px;min-height:40px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);font:600 14px Inter,system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.primary{background:var(--lime);border-color:var(--lime);color:var(--ink)}
+.danger{color:var(--red);border-color:var(--red)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select,textarea{background:#0A0C0A;border:1px solid var(--line);border-radius:12px;color:var(--text);padding:9px 12px;font:14px Inter,system-ui,sans-serif}
+textarea{width:100%}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid var(--line);font-size:12px}
+form{margin:0}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+</style>
+</head>
+<body>
+<div class="app">
+<nav>
+<div class="brand">Dey Alert</div>
+{% set nav_links = [("/admin","Dashboard"),("/admin/queue","Moderation queue"),("/admin/verifiers","Verifiers"),("/admin/users","Users and roles"),("/admin/audit","Audit log"),("/admin/settings","Settings")] %}
+{% for href, label in nav_links %}<a href="{{ href }}" {% if request.url.path == href %}class="on"{% endif %}>{{ label }}</a>{% endfor %}
+<div class="muted" style="margin:24px 14px 8px">{{ admin.name }} · {{ admin.profile.role }}</div>
+<form method="post" action="/admin/logout" style="margin-left:8px"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><button class="btn">Sign out</button></form>
+</nav>
+<main>{% block body %}{% endblock %}</main>
+</div>
+</body>
+</html>

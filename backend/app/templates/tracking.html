@@ -1,0 +1,18 @@
+{% extends "base_public.html" %}
+{% block head %}<meta http-equiv="refresh" content="30">{% endblock %}
+{% block body %}
+<div class="status">SOS active</div>
+<h1>{{ name }} is sharing their location</h1>
+<p>Last updated {{ last.at.strftime("%H:%M UTC") }}. This link stops working on {{ expires_at.strftime("%d %b at %H:%M UTC") }} or when {{ name }} is safe.</p>
+<div class="card">
+<svg viewBox="0 0 320 200" role="img" aria-label="Recent movement trail">
+<polyline points="{{ trail }}" fill="none" stroke="#A6EF1F" stroke-width="3" stroke-dasharray="6 5"/>
+<circle cx="{{ trail.split(' ')[-1].split(',')[0] }}" cy="{{ trail.split(' ')[-1].split(',')[1] }}" r="7" fill="#FF3B30"/>
+</svg>
+<p style="margin:10px 0 0"><small>Latest position in red. Dashes show recent movement.</small></p>
+</div>
+<a class="btn primary" href="https://www.google.com/maps/search/?api=1&query={{ last.lat }},{{ last.lng }}">Open in Google Maps</a>
+<a class="btn" href="tel:{{ phone }}">Call {{ name }}</a>
+<a class="btn danger" href="tel:112">Call 112</a>
+<p><small>You received this link because you agreed to be a trusted contact for {{ name }}.</small></p>
+{% endblock %}

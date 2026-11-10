@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Dashboard</h1>
+<div class="stats">
+<div class="card stat"><b>{{ stats.today }}</b><span class="muted">Incidents today</span></div>
+<div class="card stat"><b>{{ stats.active }}</b><span class="muted">Active</span></div>
+<div class="card stat"><b>{{ stats.confirmed }}</b><span class="muted">Confirmed today</span></div>
+<div class="card stat"><b>{{ stats.queue }}</b><span class="muted">In queue</span></div>
+</div>
+<div class="grid2">
+<div class="card"><h2>Incidents by type, last 30 days</h2>
+<table>{% for row in by_type %}<tr><td>{{ row.label }}</td><td style="text-align:right">{{ row.total }}</td></tr>{% else %}<tr><td class="muted">No incidents yet.</td></tr>{% endfor %}</table></div>
+<div class="card"><h2>Top LGAs, last 30 days</h2>
+<table>{% for row in top_lgas %}<tr><td>{{ row.name }}</td><td style="text-align:right">{{ row.total }}</td></tr>{% else %}<tr><td class="muted">No data yet.</td></tr>{% endfor %}</table></div>
+</div>
+{% endblock %}

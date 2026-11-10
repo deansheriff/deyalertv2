@@ -1,0 +1,59 @@
+name: deyalert
+
+x-backend: &backend
+  build:
+    context: ./backend
+    target: dev
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/deyalert
+    REDIS_URL: redis://redis:6379/0
+  volumes:
+    - ./backend:/app
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: deyalert
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./backend/dev/supabase_stub.sql:/docker-entrypoint-initdb.d/05-supabase-stub.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d deyalert"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:63790:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *backend
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8010:8000"
+
+  worker:
+    <<: *backend
+    command: arq app.worker.main.WorkerSettings
+
+volumes:
+  db-data:

@@ -1,0 +1,74 @@
+# Production services for Coolify. Set every variable in .env.example in Coolify's environment.
+name: deyalert-prod
+
+x-backend: &backend
+  build:
+    context: ./backend
+    target: runtime
+  restart: unless-stopped
+  environment:
+    ENVIRONMENT: production
+    DATABASE_URL: ${DATABASE_URL}
+    REDIS_URL: redis://redis:6379/0
+    PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    SUPABASE_URL: ${SUPABASE_URL}
+    SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:-}
+    SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+    SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    SUPABASE_SMS_HOOK_SECRET: ${SUPABASE_SMS_HOOK_SECRET}
+    FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON}
+    TERMII_API_KEY: ${TERMII_API_KEY}
+    TERMII_SENDER_ID: ${TERMII_SENDER_ID}
+    TERMII_BASE_URL: ${TERMII_BASE_URL:-https://v3.api.termii.com}
+    SENTRY_DSN: ${SENTRY_DSN:-}
+    ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
+    SMS_FALLBACK_ENABLED: ${SMS_FALLBACK_ENABLED:-false}
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: alembic upgrade head
+
+  api:
+    <<: *backend
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *backend
+    command: arq app.worker.main.WorkerSettings
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  redis-data:

@@ -1,0 +1,23 @@
+{% extends "base_public.html" %}
+{% block body %}
+{% if status == "pending" %}
+<h1>{{ owner }} wants to add you as a trusted contact for emergencies</h1>
+<div class="card">
+<ul>
+<li>A text with a link to their location if they start an SOS.</li>
+<li>A text if they miss a safety check-in.</li>
+<li>No adverts or routine messages.</li>
+</ul>
+</div>
+<form method="post"><button class="btn primary" name="answer" value="accept">Accept</button><button class="btn" name="answer" value="decline">Decline</button></form>
+<p><small>You can withdraw at any time from this page.</small></p>
+{% elif status == "accepted" %}
+<h1>You are now a trusted contact</h1>
+<p>If {{ owner }} starts an SOS, you will get a text with a link to their location.</p>
+<form method="post"><button class="btn" name="answer" value="withdraw">Withdraw consent</button></form>
+<p><small>Open this link again at any time to withdraw, or ask {{ owner }} to remove you.</small></p>
+{% else %}
+<h1>You will not receive alerts</h1>
+<p>{{ owner }} will see that you are not a trusted contact.</p>
+{% endif %}
+{% endblock %}

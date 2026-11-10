@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Moderation queue</h1>
+<p class="muted">Reports hidden after flagging or the automatic text check, waiting for a moderator's decision.</p>
+<div class="card"><table>
+<tr><th>Type</th><th>Severity</th><th>Area</th><th>Reporter band</th><th>Flag weight</th><th>Received</th><th></th></tr>
+{% for item in items %}
+<tr><td>{{ item.label }}</td><td>{{ item.severity|capitalize }}</td><td>{{ item.ward or item.lga or item.location_name or "Unknown" }}</td><td><span class="chip">{{ item.band }}</span></td><td>{{ item.flag_weight }}</td><td>{{ item.created_at.strftime("%d %b %H:%M") }}</td><td><a class="btn" href="/admin/incidents/{{ item.id }}">Review</a></td></tr>
+{% else %}<tr><td colspan="7" class="muted">Nothing is waiting for review.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

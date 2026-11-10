@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Audit log</h1>
+<form class="row" style="margin-bottom:14px"><input name="action" value="{{ action }}" placeholder="Filter by action"><button class="btn">Filter</button></form>
+<div class="card"><table>
+<tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Reason</th><th>IP</th></tr>
+{% for row in rows %}<tr><td>{{ row.created_at.strftime("%d %b %H:%M") }}</td><td>{{ row.actor or "System" }}</td><td>{{ row.action }}</td><td>{{ row.entity_type }} {{ row.entity_id or "" }}</td><td>{{ row.reason or "" }}</td><td>{{ row.ip or "" }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">Nothing logged yet.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

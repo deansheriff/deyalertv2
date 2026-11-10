@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Platform settings</h1>
+<div class="card"><h2>Corroboration</h2><p class="muted">Radius {{ config.corroboration_radius_m / 1000 }} km · Threshold {{ config.corroboration_threshold }} people. One verifier in scope is enough. Change these in the server environment.</p></div>
+<div class="card"><h2>SMS alert fallback</h2>
+<p class="muted">Sends SMS to opted-in users for confirmed critical alerts. Currently {{ "on" if sms_on and config.sms_fallback_enabled else "off" }}.</p>
+<p class="muted">Today: {{ otp_today }} of {{ config.otp_daily_cap }} sign-in codes, {{ sms_today }} of {{ config.sms_daily_cap }} alert messages.</p>
+{% if admin.is_admin %}<form method="post" action="/admin/settings/sms"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="enable" value="{{ 'no' if sms_on else 'yes' }}"><button class="btn {{ 'danger' if sms_on else '' }}">{{ "Turn off SMS fallback" if sms_on else "Turn on SMS fallback" }}</button></form>{% endif %}
+</div>
+<div class="card"><h2>Incident lifetimes</h2><table>
+{% for item in types %}<tr><td>{{ item.label }}</td><td>{% if admin.is_admin %}<form method="post" action="/admin/settings/ttl" class="row"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="code" value="{{ item.code }}"><input name="minutes" type="number" min="15" max="10080" value="{{ item.ttl_minutes }}" style="width:110px"><span class="muted">minutes</span><button class="btn">Save</button></form>{% else %}{{ item.ttl_minutes }} minutes{% endif %}</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

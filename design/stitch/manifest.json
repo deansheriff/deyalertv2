@@ -1,0 +1,564 @@
+{
+  "stitch_project_id": "7918644737185691330",
+  "design_system_asset": "assets/14479210342777017401",
+  "statuses": [
+    "planned",
+    "generated",
+    "approved",
+    "implemented"
+  ],
+  "screens": [
+    {
+      "id": "DA-M01",
+      "screen": "Language picker",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "17e02dc41a324dbdb4093c991c7b04bc",
+      "status": "implemented",
+      "implemented_in": "lib/features/onboarding/onboarding_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M02",
+      "screen": "Onboarding",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "f87227a721c941ee8653a3613a4ed5a9",
+      "status": "implemented",
+      "implemented_in": "lib/features/onboarding/onboarding_screens.dart",
+      "issue": "Phone layout centred on a 1280 px desktop canvas; crop on export or regenerate.",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M03",
+      "screen": "Phone entry",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "d8ee9962e35d41328f646925a72f2cbd",
+      "status": "implemented",
+      "implemented_in": "lib/features/auth/auth_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M04",
+      "screen": "OTP entry",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "d5f9a1c9a17148f4a0cf6ec2718f2ff3",
+      "status": "implemented",
+      "implemented_in": "lib/features/auth/auth_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M05",
+      "screen": "Location permission rationale",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "e9bc73e65ade4c9c8dcfceb697214434",
+      "status": "implemented",
+      "implemented_in": "lib/features/onboarding/onboarding_screens.dart",
+      "issue": "Phone layout centred on a 1280 px desktop canvas; crop on export or regenerate.",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M06",
+      "screen": "Notification permission rationale",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "37de7fc6a3614a868ec1009578293728",
+      "status": "implemented",
+      "implemented_in": "lib/features/onboarding/onboarding_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M07",
+      "screen": "Battery optimisation guide",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "cf0f891ba666444386c211c030a0617c",
+      "status": "implemented",
+      "implemented_in": "lib/features/onboarding/onboarding_screens.dart",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M08",
+      "screen": "Profile setup",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "690810bd255b413ba75c44b57e249fef",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M09",
+      "screen": "Home shell",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "4b4abb6db4e74c7cb04455ddf599f2c1",
+      "status": "implemented",
+      "implemented_in": "lib/core/router.dart",
+      "issue": "Phone layout centred on a 1280 px desktop canvas; crop on export or regenerate.",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M10",
+      "screen": "Map view",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "9a063c57e51342378d77e24baab465cd",
+      "status": "implemented",
+      "implemented_in": "lib/features/map/map_tab.dart",
+      "issue": "Phone layout centred on a 1280 px desktop canvas; crop on export or regenerate.",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M11",
+      "screen": "Map filter sheet",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "995423fe31574cbe9a87ffcf397c651e",
+      "status": "implemented",
+      "implemented_in": "lib/features/map/map_tab.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M12",
+      "screen": "Incident feed",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "60a934babe654ee78c0624040def4c42",
+      "status": "implemented",
+      "implemented_in": "lib/features/feed/feed_tab.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M13",
+      "screen": "Report incident",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "f6833ad8f4ec43c996b6d743e0605837",
+      "status": "implemented",
+      "implemented_in": "lib/features/report/report_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M14",
+      "screen": "Report location picker",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "49dde9174cc4451b91e78a57bcd1a189",
+      "status": "implemented",
+      "implemented_in": "lib/features/report/report_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M15",
+      "screen": "Report sent / queued",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "acd817b322ea45d1bb19a5e8c0e93e85",
+      "status": "implemented",
+      "implemented_in": "lib/features/report/report_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M16",
+      "screen": "Incident detail",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "56476d283f1e411ca1f0d7e539c5d9e4",
+      "status": "implemented",
+      "implemented_in": "lib/features/incidents/incident_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M17",
+      "screen": "Corroborate sheet",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "6de61edc28e24b47a6d2b481723a403a",
+      "status": "implemented",
+      "implemented_in": "lib/features/incidents/incident_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M18",
+      "screen": "Flag sheet",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "0d5b845acaa744efa4ea622d36b2fba0",
+      "status": "implemented",
+      "implemented_in": "lib/features/incidents/incident_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M19",
+      "screen": "SOS Lite",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "d7a2a691958d4867962d08103259ce41",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "states": {
+        "no_contacts": "207baa0b8d7f497d9c5d954fdee9156b"
+      },
+      "review": "fix"
+    },
+    {
+      "id": "DA-M20",
+      "screen": "SOS cancel window",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "805e6ba58f4c4bc183c822e644ad3336",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M21",
+      "screen": "Trusted contacts",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "8ad01eb61cfd4b648c3da2ff794a0b50",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M22",
+      "screen": "Add or edit contact",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "6a0c05bc51784347b09ffa86eef11742",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M23",
+      "screen": "Profile tab",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "aca068f2d6a64671a79be9790339cef8",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "issue": "On a 1280 px desktop canvas; check the layout, then crop on export or regenerate.",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M24",
+      "screen": "Empty and error states",
+      "device": "mobile",
+      "phase": 1,
+      "stitch_screen_id": "f8cae2c0466846c782c31aa920d822e2",
+      "status": "implemented",
+      "implemented_in": "lib/features/feed/feed_tab.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M25",
+      "screen": "Notifications",
+      "device": "mobile",
+      "phase": 2,
+      "stitch_screen_id": "b85056ae2daa4b4cb27fa054b4b0bca7",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M26",
+      "screen": "Verifier actions",
+      "device": "mobile",
+      "phase": 2,
+      "stitch_screen_id": "bd404b0e078d42bca4a228ad158aa635",
+      "status": "implemented",
+      "implemented_in": "lib/features/incidents/incident_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M27",
+      "screen": "My reports",
+      "device": "mobile",
+      "phase": 2,
+      "stitch_screen_id": "9762ede7c22e4ff28e205419b389b619",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M28",
+      "screen": "Background location disclosure",
+      "device": "mobile",
+      "phase": 3,
+      "stitch_screen_id": "a3c2206f4b2646a7901694abba41433c",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M29",
+      "screen": "SOS active",
+      "device": "mobile",
+      "phase": 3,
+      "stitch_screen_id": "3c9a07b5fbe04fe78cb9dfb7a098e2ef",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M30",
+      "screen": "Safe check-in setup",
+      "device": "mobile",
+      "phase": 3,
+      "stitch_screen_id": "1c33c8813ba243da9d6e43178aed5e28",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M31",
+      "screen": "Check-in overdue prompt",
+      "device": "mobile",
+      "phase": 3,
+      "stitch_screen_id": "6a9b35afb6c04385b2f4f75c87eac7d8",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M32",
+      "screen": "SOS resolved",
+      "device": "mobile",
+      "phase": 3,
+      "stitch_screen_id": "075b0934602741be941bbdff78ac35e0",
+      "status": "implemented",
+      "implemented_in": "lib/features/sos/sos_screens.dart",
+      "issue": "On a 1280 px desktop canvas; check the layout, then crop on export or regenerate.",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M33",
+      "screen": "Settings",
+      "device": "mobile",
+      "phase": 4,
+      "stitch_screen_id": "6248f9e9f7cc483ca8530a944c694a7b",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-M34",
+      "screen": "Language and data saver",
+      "device": "mobile",
+      "phase": 4,
+      "stitch_screen_id": "00aea4f1a19c4f0597c80310fcd36fd3",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M35",
+      "screen": "Quiet hours",
+      "device": "mobile",
+      "phase": 4,
+      "stitch_screen_id": "41c8eebba30e49158b495c77ac9d7724",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "fix"
+    },
+    {
+      "id": "DA-M36",
+      "screen": "Export and delete account",
+      "device": "mobile",
+      "phase": 4,
+      "stitch_screen_id": "6f9e968d879b45cba4dbfc8d3ec379a8",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "pass"
+    },
+    {
+      "id": "DA-M37",
+      "screen": "OTP fallback options",
+      "device": "mobile",
+      "phase": 4,
+      "stitch_screen_id": "47ff14f25bd64dcbb668d34ecb99888e",
+      "status": "generated",
+      "implemented_in": null,
+      "review": "fix"
+    },
+    {
+      "id": "DA-W01",
+      "screen": "Sign-in and MFA",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "06856bb2c54f4f5bab0b2e42c696ea44",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/login.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W02",
+      "screen": "Dashboard",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "294d6f755b934ce2a3af6214f642816c",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/dashboard.html",
+      "review": "fix"
+    },
+    {
+      "id": "DA-W03",
+      "screen": "Moderation queue",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "1e026ecaa1c0416bb1c960d3946815ff",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/queue.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W04",
+      "screen": "Incident review drawer",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "e2de71c7573b403c90776b5e89fb9a17",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/incident.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W05",
+      "screen": "Reporter lookup dialog",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "9fe91f3273fe46ef892d54230c3ecd24",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/incident.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W06",
+      "screen": "Verifier management",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "926204c1747e4b18999fbe9146426347",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/verifiers.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W07",
+      "screen": "Add or approve verifier",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "9039ff47fd044fae8a4d3ae7fa2f94df",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/verifiers.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W08",
+      "screen": "Users and roles",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "972e1dfccf1c482e9f29325605053ff5",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/users.html",
+      "review": "fix"
+    },
+    {
+      "id": "DA-W09",
+      "screen": "Audit log",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "82b47125f20f458c8a04798e10018910",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/audit.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W10",
+      "screen": "Platform settings",
+      "device": "desktop",
+      "phase": 2,
+      "stitch_screen_id": "e7e3108ffb4f4d21ae6857429dc0968f",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/settings.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-W11",
+      "screen": "SMS and OTP spend",
+      "device": "desktop",
+      "phase": 4,
+      "stitch_screen_id": "7bf6b039a3874207b4513f51ebb91896",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/admin/settings.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-P01",
+      "screen": "SOS tracking page",
+      "device": "public-web",
+      "phase": 3,
+      "stitch_screen_id": "e29a35db03014c29bfbb6693a341fe16",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/tracking.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-P02",
+      "screen": "Tracking ended or expired",
+      "device": "public-web",
+      "phase": 3,
+      "stitch_screen_id": "6b45c799e5924cbdb67f28fe1e12b4fd",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/tracking_ended.html",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-P03",
+      "screen": "Contact opt-in",
+      "device": "public-web",
+      "phase": 3,
+      "stitch_screen_id": "184a3d3ba022449bbb28e8453be8376a",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/opt_in.html",
+      "issue": "Phone layout centred on a 1280 px desktop canvas; crop on export or regenerate.",
+      "review": "fix"
+    },
+    {
+      "id": "DA-P04",
+      "screen": "Opt-in result",
+      "device": "public-web",
+      "phase": 3,
+      "stitch_screen_id": "c9d8d3f62dea44d6bfd828e58c10f81a",
+      "status": "implemented",
+      "implemented_in": "backend/app/templates/opt_in.html",
+      "issue": "On a 1280 px desktop canvas; check the layout, then crop on export or regenerate.",
+      "review": "blocker"
+    },
+    {
+      "id": "DA-P05",
+      "screen": "Privacy and terms layout",
+      "device": "public-web",
+      "phase": 1,
+      "stitch_screen_id": "4299a4f32c454dbf8b9bf45e590cf59c",
+      "status": "implemented",
+      "implemented_in": "lib/features/settings/profile_screens.dart",
+      "review": "blocker"
+    }
+  ],
+  "superseded_screen_ids": [
+    "bf7e9e90071d4d5abbd8a13f7fd0681e",
+    "286910dbdc1343d6b533df04390700b6",
+    "78b3d8481a1b410f995118e89378a4fe",
+    "b982e126d25140b09d6962877a5aae58",
+    "e8fd3fe32c564d14b8850eb8de258311"
+  ],
+  "not_in_inventory": {
+    "c5ec247d0195475797a89e4180ddd326": "System Connectivity & Status Test, made by hand to test Stitch"
+  },
+  "implementation_note": "Implemented in the v3 style with the corrected wording from review.md, by the delegated screen decisions of 2026-11-09. Layouts were simplified where the Stitch screens carried invented content. Stitch screens themselves may still show the old text."
+}

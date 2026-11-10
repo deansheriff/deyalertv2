@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Users and roles</h1>
+<form class="row" style="margin-bottom:14px"><input name="q" value="{{ q }}" placeholder="Search phone or name"><button class="btn">Search</button></form>
+<div class="card"><table>
+<tr><th>Phone</th><th>Name</th><th>Ward</th><th>Status</th><th>Role</th></tr>
+{% for item in items %}<tr><td>{{ item.phone }}</td><td>{{ item.display_name or "" }}</td><td>{{ item.ward or "" }}</td><td>{{ "Active" if item.is_active else "Disabled" }}</td>
+<td>{% if admin.is_admin and item.id != admin.profile.id %}<form method="post" action="/admin/users/{{ item.id }}/role" class="row" onsubmit="return confirm('Change this role?')"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><select name="role">{% for role in ["member","verifier","moderator","admin"] %}<option {% if role == item.role %}selected{% endif %}>{{ role }}</option>{% endfor %}</select><button class="btn">Save</button></form>{% else %}{{ item.role }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No users found.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

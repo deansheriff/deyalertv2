@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Verifiers</h1>
+<div class="card"><table>
+<tr><th>Name</th><th>Title</th><th>Area</th><th>Status</th><th>Approved by</th><th></th></tr>
+{% for row in rows %}<tr><td>{{ row.display_name or row.phone }}</td><td>{{ row.title or "" }}</td><td>{{ row.lga }}{% if row.ward %} · {{ row.ward }}{% endif %}</td><td><span class="chip">{{ "Active" if row.is_active else "Suspended" }}</span></td><td>{{ row.approved_by or "" }}</td>
+<td>{% if admin.is_admin %}<form method="post" action="/admin/verifiers/{{ row.id }}/toggle"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><button class="btn">{{ "Suspend" if row.is_active else "Reinstate" }}</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No verifiers yet.</td></tr>{% endfor %}
+</table></div>
+{% if admin.is_admin %}
+<div class="card"><h2>Add verifier</h2>
+<form method="post" action="/admin/verifiers" class="row"><input type="hidden" name="csrf" value="{{ admin.csrf }}">
+<input name="phone" placeholder="+234..." required>
+<input name="title" placeholder="Community Chairman" required>
+<select name="lga_id" required>{% for lga in lgas %}<option value="{{ lga.id }}">{{ lga.name }}, {{ lga.state }}</option>{% endfor %}</select>
+<input name="ward_name" placeholder="Ward (blank for whole LGA)">
+<button class="btn primary">Approve</button></form></div>
+{% endif %}
+{% endblock %}

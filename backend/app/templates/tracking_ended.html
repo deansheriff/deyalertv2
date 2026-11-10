@@ -1,0 +1,12 @@
+{% extends "base_public.html" %}
+{% block body %}
+{% if safe %}
+<h1>Person is safe</h1>
+<p>They have marked themselves safe. You do not need to do anything.</p>
+{% else %}
+<h1>This link has ended</h1>
+<p>The link has ended or expired.</p>
+<p>If you are worried, call them directly or call 112.</p>
+<a class="btn" href="tel:112">Call 112</a>
+{% endif %}
+{% endblock %}
