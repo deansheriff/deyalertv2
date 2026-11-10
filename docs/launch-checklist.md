@@ -17,7 +17,7 @@ The code is complete for an Android pilot. These steps need your accounts, a rea
 
 ## 2. Deploy the backend
 
-- [ ] In Coolify, create a Docker Compose app from `docker-compose.prod.yml` and set every variable in `.env.example`.
+- [ ] In Coolify, create a Docker Compose app from `docker-compose.prod.yml` and set every variable in `.env.example`. Until Termii and Firebase are set up, use `ENVIRONMENT=staging`: sign-in codes and alerts are logged instead of sent. Switch to `production` once those keys are in; it then refuses to start if any are missing.
 - [ ] Set `DATABASE_URL` to the Supabase Postgres connection, in `postgresql+asyncpg://postgres:<password>@<host>:5432/postgres` form. With both on the same Coolify server, use Postgres's internal Docker hostname rather than a public address.
 - [ ] Generate `ADMIN_SESSION_SECRET`. The API refuses to start with a weak value or a missing key.
 - [ ] Put Cloudflare Tunnel in front of `api`, and add WAF and rate rules for `/v1/auth/*` and `/admin/*`.

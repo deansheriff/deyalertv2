@@ -30,7 +30,7 @@ def _set_cookie(response: RedirectResponse, name: str, value: str) -> None:
         name,
         value,
         httponly=True,
-        secure=get_settings().environment == "production",
+        secure=get_settings().environment != "dev",
         samesite="strict",
         path="/admin",
     )

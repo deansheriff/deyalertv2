@@ -7,7 +7,8 @@ x-backend: &backend
     target: runtime
   restart: unless-stopped
   environment:
-    ENVIRONMENT: production
+    # Use staging to test before Termii and Firebase exist; codes and alerts are logged, not sent.
+    ENVIRONMENT: ${ENVIRONMENT:-production}
     DATABASE_URL: ${DATABASE_URL}
     REDIS_URL: redis://redis:6379/0
     PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
