@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from redis.asyncio import Redis
 from sqlalchemy import text
@@ -25,7 +25,7 @@ SMS_OFF_FLAG = "flag:sms_fallback_off"
 ACTIONS = {"restore", "mark_false", "extend", "confirm", "resolve"}
 
 
-def _set_cookie(response: RedirectResponse, name: str, value: str) -> None:
+def _set_cookie(response: Response, name: str, value: str) -> None:
     response.set_cookie(
         name,
         value,
@@ -46,9 +46,13 @@ def _page(request: Request, admin: Admin, name: str, **context: Any) -> HTMLResp
     )
 
 
+MIN_PASSWORD = 12
+
+
 @router.get("/login", response_class=HTMLResponse)
-async def login_form(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+async def login_form(request: Request, changed: bool = False) -> HTMLResponse:
+    notice = "Password changed. Sign in with your new password." if changed else None
+    return templates.TemplateResponse(request, "login.html", {"error": None, "notice": notice})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -56,6 +60,7 @@ async def login(
     request: Request,
     email: str = Form(),
     password: str = Form(),
+    session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> Any:
     client = request.client.host if request.client else "unknown"
@@ -69,50 +74,49 @@ async def login(
             status_code=429,
         )
     result = await auth.password_sign_in(email, password)
-    factor = await auth.first_totp_factor(result["access_token"]) if result else None
-    if result is None or factor is None:
+    user = (result or {}).get("user") or {}
+    user_id = UUID(user["id"]) if user.get("id") else None
+    if result is None or user_id is None or not await auth.is_staff(session, user_id):
         return templates.TemplateResponse(
-            request,
-            "login.html",
-            {"error": "Email or password is incorrect, or two-step sign-in is not set up."},
-            status_code=401,
+            request, "login.html", {"error": "Email or password is incorrect."}, status_code=401
         )
-    response = _back("/admin/mfa")
-    _set_cookie(response, auth.PENDING_COOKIE, auth.pending_cookie(result["access_token"], factor))
+    if (user.get("app_metadata") or {}).get("must_change_password"):
+        response = _back("/admin/password")
+        _set_cookie(response, auth.PENDING_COOKIE, auth.password_cookie(user_id))
+        return response
+    response = _back("/admin")
+    _set_cookie(response, auth.COOKIE, auth.session_cookie(user_id))
     return response
 
 
-@router.get("/mfa", response_class=HTMLResponse)
-async def mfa_form(request: Request) -> Any:
-    if auth.read_pending(request.cookies.get(auth.PENDING_COOKIE)) is None:
+@router.get("/password", response_class=HTMLResponse)
+async def password_form(request: Request) -> Any:
+    if auth.read_password_pending(request.cookies.get(auth.PENDING_COOKIE)) is None:
         return _back("/admin/login")
-    return templates.TemplateResponse(request, "mfa.html", {"error": None})
+    return templates.TemplateResponse(request, "password.html", {"error": None})
 
 
-@router.post("/mfa", response_class=HTMLResponse)
-async def mfa(
+@router.post("/password", response_class=HTMLResponse)
+async def change_password(
     request: Request,
-    code: str = Form(),
-    session: AsyncSession = Depends(get_session),
-    redis: Redis = Depends(get_redis),
+    new_password: str = Form(),
+    confirm_password: str = Form(),
 ) -> Any:
-    pending = auth.read_pending(request.cookies.get(auth.PENDING_COOKIE))
+    pending = auth.read_password_pending(request.cookies.get(auth.PENDING_COOKIE))
     if pending is None:
         return _back("/admin/login")
-    client = request.client.host if request.client else "unknown"
-    try:
-        await hit_limit(redis, f"rl:admin_mfa:{client}", 10, 900)
-    except ApiError:
+    error = None
+    if len(new_password) < MIN_PASSWORD:
+        error = f"Use at least {MIN_PASSWORD} characters."
+    elif new_password != confirm_password:
+        error = "The two passwords do not match."
+    elif not await auth.set_password(UUID(pending["sub"]), new_password):
+        error = "Could not save the new password. Try again."
+    if error:
         return templates.TemplateResponse(
-            request, "mfa.html", {"error": "Too many attempts."}, status_code=429
+            request, "password.html", {"error": error}, status_code=400
         )
-    user_id = await auth.verify_totp(pending["token"], pending["factor"], code)
-    if user_id is None:
-        return templates.TemplateResponse(
-            request, "mfa.html", {"error": "That code is not right."}, status_code=401
-        )
-    response = _back("/admin")
-    _set_cookie(response, auth.COOKIE, auth.session_cookie(UUID(user_id)))
+    response = _back("/admin/login?changed=1")
     response.delete_cookie(auth.PENDING_COOKIE, path="/admin")
     return response
 
@@ -446,7 +450,9 @@ async def toggle_verifier(
     return _back("/admin/verifiers")
 
 
-def _mask(phone: str) -> str:
+def _mask(phone: str | None) -> str:
+    if not phone:
+        return "Email sign-in"
     return f"{phone[:7]}****{phone[-2:]}" if len(phone) > 9 else "****"
 
 

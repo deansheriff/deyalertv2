@@ -80,8 +80,8 @@ async def test_tampered_session_is_rejected(web, db):  # noqa: F811
     assert (await web.get("/admin")).status_code == 303
 
 
-async def test_mfa_pending_token_cannot_open_the_panel(web, db):  # noqa: F811
-    web.cookies.set(auth.COOKIE, auth.pending_cookie("token", "factor"), path="/admin")
+async def test_password_change_token_cannot_open_the_panel(web, db):  # noqa: F811
+    web.cookies.set(auth.COOKIE, auth.password_cookie(await user(db, role="admin")), path="/admin")
     assert (await web.get("/admin")).status_code == 303
 
 
@@ -182,3 +182,85 @@ async def test_sms_kill_switch(web, db):  # noqa: F811
     assert await web.redis.get("flag:sms_fallback_off") == "1"
     await web.post("/admin/settings/sms", data={"enable": "yes", "csrf": csrf})
     assert await web.redis.get("flag:sms_fallback_off") is None
+
+
+def fake_supabase(monkeypatch, user_id, must_change=False):
+    calls = {}
+
+    async def sign_in(email, password):
+        if password != "right":
+            return None
+        metadata = {"must_change_password": must_change}
+        return {"access_token": "token", "user": {"id": str(user_id), "app_metadata": metadata}}
+
+    async def set_password(uid, password):
+        calls["password"] = (uid, password)
+        return True
+
+    monkeypatch.setattr(auth, "password_sign_in", sign_in)
+    monkeypatch.setattr(auth, "set_password", set_password)
+    return calls
+
+
+async def sign_in(client, password="right"):
+    return await client.post("/admin/login", data={"email": "a@example.com", "password": password})
+
+
+async def test_members_cannot_sign_in_to_the_panel(web, db, monkeypatch):  # noqa: F811
+    fake_supabase(monkeypatch, await user(db))
+    response = await sign_in(web)
+    assert response.status_code == 401
+    assert auth.PENDING_COOKIE not in response.cookies
+
+
+async def test_wrong_password_is_refused(web, db, monkeypatch):  # noqa: F811
+    fake_supabase(monkeypatch, await user(db, role="admin"))
+    assert (await sign_in(web, password="wrong")).status_code == 401
+
+
+async def test_staff_password_opens_the_panel(web, db, monkeypatch):  # noqa: F811
+    fake_supabase(monkeypatch, await user(db, role="moderator"))
+    response = await sign_in(web)
+    assert response.headers["location"] == "/admin"
+    assert (await web.get("/admin")).status_code == 200
+
+
+async def test_seeded_admin_must_choose_a_password_first(web, db, monkeypatch):  # noqa: F811
+    admin = await user(db, role="admin")
+    calls = fake_supabase(monkeypatch, admin, must_change=True)
+    response = await sign_in(web)
+    assert response.headers["location"] == "/admin/password"
+    # The panel stays closed until the new password is saved.
+    assert (await web.get("/admin")).status_code == 303
+    assert (await web.get("/admin/password")).status_code == 200
+
+    short = await web.post("/admin/password", data={"new_password": "short", "confirm_password": "short"})
+    assert short.status_code == 400
+    mismatch = await web.post(
+        "/admin/password",
+        data={"new_password": "a-long-password-1", "confirm_password": "a-long-password-2"},
+    )
+    assert mismatch.status_code == 400
+    assert "password" not in calls
+
+    done = await web.post(
+        "/admin/password",
+        data={"new_password": "a-long-password-1", "confirm_password": "a-long-password-1"},
+    )
+    assert done.headers["location"] == "/admin/login?changed=1"
+    assert calls["password"] == (admin, "a-long-password-1")
+    assert (await web.get("/admin/password")).headers["location"] == "/admin/login"
+
+
+async def test_email_only_admin_appears_in_the_user_list(web, db):  # noqa: F811
+    staff = uuid.uuid4()
+    await db.execute("INSERT INTO auth.users (id) VALUES ($1)", staff)
+    await db.execute(
+        "INSERT INTO profiles (id, role, display_name) VALUES ($1, 'admin', 'Admin')", staff
+    )
+    try:
+        signed_in(web, staff)
+        assert "Email sign-in" in (await web.get("/admin/users")).text
+    finally:
+        # A phone-less profile would block the migration downgrade test.
+        await db.execute("DELETE FROM auth.users WHERE id = $1", staff)

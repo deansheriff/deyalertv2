@@ -72,7 +72,9 @@ class PillButton extends StatelessWidget {
             onTap: enabled ? onPressed : null,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 52),
+              // heightFactor keeps the pill its own height in slots that allow the whole screen.
               child: Center(
+                heightFactor: 1,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,

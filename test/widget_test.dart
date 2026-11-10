@@ -210,6 +210,20 @@ void main() {
     });
   });
 
+  testWidgets('a bottom button keeps its own height and leaves the page visible', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: DeyPage(
+          bottom: PillButton('Send code', onPressed: null),
+          children: const [Text('Phone number')],
+        ),
+      ),
+    );
+    expect(tester.getSize(find.byType(PillButton)).height, lessThan(80));
+    expect(find.text('Phone number').hitTestable(), findsOneWidget);
+  });
+
   group('phone numbers', () {
     test('accepts common Nigerian formats', () {
       for (final input in ['08023456789', '8023456789', '+2348023456789', '234 802 345 6789']) {

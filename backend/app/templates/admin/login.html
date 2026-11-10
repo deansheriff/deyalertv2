@@ -6,8 +6,9 @@ h1{margin:0 0 4px;font-size:24px}p{color:#B4BCB4;margin:0 0 16px}
 label{display:block;margin:12px 0 4px;color:#B4BCB4}
 input{width:100%;padding:12px;border-radius:12px;border:1px solid #3A413A;background:#0A0C0A;color:#F2F5F3;box-sizing:border-box}
 button{width:100%;margin-top:18px;min-height:48px;border:0;border-radius:999px;background:#A6EF1F;color:#0A0C0A;font-weight:700;font-size:15px;cursor:pointer}
-.err{color:#FF3B30}</style></head>
+.err{color:#FF3B30}.ok{color:#A6EF1F}</style></head>
 <body><form method="post"><h1>Dey Alert</h1><p>Moderators and admins only.</p>
+{% if notice %}<p class="ok">{{ notice }}</p>{% endif %}
 {% if error %}<p class="err">{{ error }}</p>{% endif %}
 <label for="email">Email</label><input id="email" name="email" type="email" required autofocus>
 <label for="password">Password</label><input id="password" name="password" type="password" required>

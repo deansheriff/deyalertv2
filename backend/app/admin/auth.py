@@ -63,15 +63,19 @@ def session_cookie(user_id: UUID) -> str:
     return _sign({"sub": str(user_id), "purpose": "session"}, timedelta(hours=SESSION_HOURS))
 
 
-def pending_cookie(access_token: str, factor_id: str) -> str:
-    return _sign(
-        {"token": access_token, "factor": factor_id, "purpose": "mfa"},
-        timedelta(minutes=PENDING_MINUTES),
+def password_cookie(user_id: UUID) -> str:
+    return _sign({"sub": str(user_id), "purpose": "password"}, timedelta(minutes=PENDING_MINUTES))
+
+
+def read_password_pending(token: str | None) -> dict[str, Any] | None:
+    return _read(token, "password")
+
+
+async def is_staff(session: AsyncSession, user_id: UUID) -> bool:
+    role = await session.scalar(
+        text("SELECT role FROM profiles WHERE id = :id AND is_active"), {"id": user_id}
     )
-
-
-def read_pending(token: str | None) -> dict[str, Any] | None:
-    return _read(token, "mfa")
+    return role in ("moderator", "admin")
 
 
 def csrf_token(session_value: str) -> str:
@@ -137,40 +141,15 @@ async def password_sign_in(email: str, password: str) -> dict[str, Any] | None:
     return response.json() if response.status_code == 200 else None
 
 
-async def first_totp_factor(access_token: str) -> str | None:
+async def set_password(user_id: UUID, password: str) -> bool:
+    """Sets a new password and clears the must-change flag left by data.seed_admin."""
     settings = get_settings()
+    key = settings.supabase_service_role_key
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"{settings.supabase_url}/auth/v1/user",
-            headers={
-                "apikey": settings.supabase_anon_key,
-                "Authorization": f"Bearer {access_token}",
-            },
+        response = await client.put(
+            f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            json={"password": password, "app_metadata": {"must_change_password": False}},
             timeout=15,
         )
-    if response.status_code != 200:
-        return None
-    for factor in response.json().get("factors") or []:
-        if factor.get("factor_type") == "totp" and factor.get("status") == "verified":
-            return factor["id"]
-    return None
-
-
-async def verify_totp(access_token: str, factor_id: str, code: str) -> str | None:
-    """Returns the user id on success."""
-    settings = get_settings()
-    headers = {"apikey": settings.supabase_anon_key, "Authorization": f"Bearer {access_token}"}
-    base = f"{settings.supabase_url}/auth/v1/factors/{factor_id}"
-    async with httpx.AsyncClient() as client:
-        challenge = await client.post(f"{base}/challenge", headers=headers, timeout=15)
-        if challenge.status_code != 200:
-            return None
-        verified = await client.post(
-            f"{base}/verify",
-            headers=headers,
-            json={"challenge_id": challenge.json()["id"], "code": code},
-            timeout=15,
-        )
-    if verified.status_code != 200:
-        return None
-    return verified.json()["user"]["id"]
+    return response.status_code == 200
