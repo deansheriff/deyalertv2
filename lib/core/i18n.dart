@@ -17,6 +17,8 @@ const _pidgin = <String, String>{
   'Stay alert near you': 'Dey alert for your area',
   'Protect your community': 'Protect your community',
   'Enter your phone number': 'Put your phone number',
+  'Enter your email': 'Put your email',
+  'Check your email': 'Check your email',
   'Send code': 'Send code',
   'Verify phone number': 'Confirm your number',
   'Map': 'Map',

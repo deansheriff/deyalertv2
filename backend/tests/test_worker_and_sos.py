@@ -17,8 +17,9 @@ from sqlalchemy.pool import NullPool
 from app.api.auth_hook import get_hook_sms, verify_signature
 from app.core.clients import get_redis
 from app.core.config import Settings, get_settings
+from app.core.db import get_session
 from app.main import app
-from app.services import media, notifications, sos
+from app.services import app_settings, media, notifications, sos
 from tests.test_api_incidents import (  # noqa: F401
     LAT,
     LNG,
@@ -281,12 +282,22 @@ def test_signature_rejects_tampering_and_old_timestamps():
 
 
 @pytest.fixture
-async def hook():
+async def hook(monkeypatch):
     sms = RecordingSms()
     redis = FakeRedis()
+    switch = {"phone": True}
 
     async def redis_override():
         yield redis
+
+    async def no_session():
+        yield None
+
+    async def phone_on(_session):
+        return switch["phone"]
+
+    monkeypatch.setattr(app_settings, "phone_sign_in_enabled", phone_on)
+    app.dependency_overrides[get_session] = no_session
 
     app.dependency_overrides[get_settings] = lambda: Settings(
         supabase_sms_hook_secret=SECRET, otp_per_phone_hourly_cap=2
@@ -296,6 +307,7 @@ async def hook():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         client.sms = sms
+        client.switch = switch
         yield client
     app.dependency_overrides.clear()
 
@@ -312,6 +324,13 @@ async def test_hook_sends_otp_and_enforces_per_phone_cap(hook):
     third = await call_hook(hook)
     assert third.status_code == 429
     assert third.json()["error"]["http_code"] == 429
+
+
+async def test_hook_refuses_while_phone_sign_in_is_off(hook):
+    hook.switch["phone"] = False
+    response = await call_hook(hook)
+    assert response.status_code == 403
+    assert hook.sms.sent == []
 
 
 async def test_hook_rejects_bad_signature(hook):

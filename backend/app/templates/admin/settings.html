@@ -1,6 +1,30 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>Platform settings</h1>
+<div class="card"><h2>Sign-in</h2>
+<p class="muted">People sign in to the app with a code sent by email. Phone sign-in is {{ "on" if phone_sign_in else "off" }}{% if not phone_sign_in %}; turn it on once an SMS provider is connected{% endif %}.</p>
+{% if admin.is_admin %}<form method="post" action="/admin/settings/sign-in"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="enable" value="{{ 'no' if phone_sign_in else 'yes' }}"><button class="btn {{ 'danger' if phone_sign_in else '' }}">{{ "Turn off phone sign-in" if phone_sign_in else "Turn on phone sign-in" }}</button></form>{% endif %}
+</div>
+<div class="card" id="smtp"><h2>Email (SMTP)</h2>
+<p class="muted">Sign-in codes are sent through this server. {% if smtp %}Sending from {{ smtp.from_name }} &lt;{{ smtp.from_email }}&gt; via {{ smtp.host }}:{{ smtp.port }}.{% else %}Not set up yet, so nobody can sign in by email.{% endif %} Today: {{ email_today }} of {{ config.email_daily_cap }} emails.</p>
+{% if smtp_notice %}<p style="color:var(--lime)">{{ smtp_notice }}</p>{% endif %}
+{% if smtp_error %}<p style="color:var(--red)">{{ smtp_error }}</p>{% endif %}
+{% if admin.is_admin %}
+<form method="post" action="/admin/settings/smtp" class="smtp-form">
+<input type="hidden" name="csrf" value="{{ admin.csrf }}">
+<label>Host<input name="host" required placeholder="smtp.example.com" value="{{ smtp.host if smtp else '' }}"></label>
+<label>Port<input name="port" type="number" min="1" max="65535" required value="{{ smtp.port if smtp else 587 }}"></label>
+<label>Security<select name="security">{% for mode in security_modes %}<option value="{{ mode }}" {{ "selected" if smtp and smtp.security == mode }}>{{ {"starttls": "STARTTLS (port 587)", "ssl": "SSL/TLS (port 465)", "none": "None (not recommended)"}[mode] }}</option>{% endfor %}</select></label>
+<label>Username<input name="username" autocomplete="off" value="{{ smtp.username if smtp else '' }}"></label>
+<label>Password<input name="password" type="password" autocomplete="new-password" placeholder="{{ 'Saved. Leave blank to keep it' if smtp and smtp.has_password else '' }}"></label>
+<label>Sender email<input name="from_email" type="email" required placeholder="alerts@example.com" value="{{ smtp.from_email if smtp else '' }}"></label>
+<label>Sender name<input name="from_name" value="{{ smtp.from_name if smtp else 'Dey Alert' }}"></label>
+<div><button class="btn primary">Save SMTP settings</button></div>
+</form>
+{% if smtp %}<form method="post" action="/admin/settings/smtp/test" class="row" style="margin-top:14px"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input name="to" type="email" required placeholder="Send a test to…" style="min-width:260px"><button class="btn">Send test email</button></form>{% endif %}
+{% endif %}
+</div>
+<style>.smtp-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;align-items:end}.smtp-form label{display:grid;gap:4px;color:var(--muted);font-size:12px}.smtp-form input,.smtp-form select{width:100%}</style>
 <div class="card"><h2>Corroboration</h2><p class="muted">Radius {{ config.corroboration_radius_m / 1000 }} km · Threshold {{ config.corroboration_threshold }} people. One verifier in scope is enough. Change these in the server environment.</p></div>
 <div class="card"><h2>SMS alert fallback</h2>
 <p class="muted">Sends SMS to opted-in users for confirmed critical alerts. Currently {{ "on" if sms_on and config.sms_fallback_enabled else "off" }}.</p>

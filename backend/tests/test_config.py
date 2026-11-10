@@ -9,7 +9,7 @@ def complete(**overrides):
         "supabase_jwks_url": "https://x.supabase.co/jwks",
         "supabase_anon_key": "a",
         "supabase_service_role_key": "b",
-        "supabase_sms_hook_secret": "c",
+        "supabase_email_hook_secret": "c",
         "fcm_service_account_json": "{}",
         "termii_api_key": "d",
         "termii_sender_id": "DeyAlert",

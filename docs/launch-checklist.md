@@ -5,7 +5,14 @@ The code is complete for an Android pilot. These steps need your accounts, a rea
 ## 1. Accounts and keys
 
 - [x] **Supabase:** self-hosted on Coolify at `https://supabase.sherpackage.com`. It signs sessions with a shared secret, so set the backend's `SUPABASE_JWT_SECRET` to the Supabase service's `JWT_SECRET` and leave `SUPABASE_JWKS_URL` empty. Also copy the service role key.
-- [ ] **Supabase phone auth:** phone sign-in is on. Set these on the Supabase auth service in Coolify:
+- [ ] **Supabase email sign-in:** the app signs people in with a 6-digit code by email. Supabase hands each email to the API, which sends it through the SMTP server set in the admin panel. On the Supabase auth service in Coolify set:
+  - `GOTRUE_HOOK_SEND_EMAIL_ENABLED=true`
+  - `GOTRUE_HOOK_SEND_EMAIL_URI=https://<api-host>/v1/auth/email-hook`
+  - `GOTRUE_HOOK_SEND_EMAIL_SECRETS=v1,whsec_<base64 secret>`, and the same value in the API's `SUPABASE_EMAIL_HOOK_SECRET`.
+  - Email sign-up on (`ENABLE_EMAIL_SIGNUP=true`) and `GOTRUE_MAILER_AUTOCONFIRM=false`.
+  - If people hit "too many emails", raise `GOTRUE_RATE_LIMIT_EMAIL_SENT`.
+- [ ] **SMTP:** in the admin panel, open Settings → Email (SMTP), enter your provider's host, port, username, password and sender, save, and send a test email. The password is stored encrypted with `ADMIN_SESSION_SECRET`; changing that secret means entering the SMTP password again.
+- [ ] **Phone sign-in (optional, later):** off by default. Once an SMS provider works, turn it on in Settings → Sign-in. Then set these on the Supabase auth service in Coolify:
   - `GOTRUE_SMS_AUTOCONFIRM=false`. It is currently on, which lets anyone sign up with any number and a password, skipping the code.
   - While testing without Termii: `GOTRUE_SMS_TEST_OTP=<your number without +>:<6 digits>`. Remove it before launch.
   - Once Termii is approved: `GOTRUE_HOOK_SEND_SMS_ENABLED=true`, `GOTRUE_HOOK_SEND_SMS_URI=https://<api-host>/v1/auth/sms-hook`, and `GOTRUE_HOOK_SEND_SMS_SECRETS=v1,whsec_<base64 secret>`. Put the same secret in the backend's `SUPABASE_SMS_HOOK_SECRET`.

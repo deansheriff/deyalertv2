@@ -16,6 +16,7 @@ CLAIM_OPTIONS = {"require": ["exp", "sub"]}
 class AuthUser:
     id: UUID
     phone: str | None
+    email: str | None = None
 
 
 def _jwks() -> jwt.PyJWKClient:
@@ -46,7 +47,11 @@ def decode_token(token: str) -> AuthUser:
             audience="authenticated",
             options=CLAIM_OPTIONS,
         )
-    return AuthUser(id=UUID(claims["sub"]), phone=claims.get("phone"))
+    return AuthUser(
+        id=UUID(claims["sub"]),
+        phone=claims.get("phone") or None,
+        email=(claims.get("email") or "").lower() or None,
+    )
 
 
 async def get_auth_user(authorization: str = Header(default="")) -> AuthUser:

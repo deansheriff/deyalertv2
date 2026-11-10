@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin import routes as admin_routes
-from app.api import auth_hook, incidents, me, public, sos
+from app.api import app_config, auth_hook, incidents, me, public, sos
 from app.core.config import get_settings, production_problems
 from app.core.db import get_session
 from app.core.errors import install_handlers
@@ -35,6 +35,7 @@ app.include_router(incidents.router)
 app.include_router(sos.router)
 app.include_router(auth_hook.router)
 app.include_router(public.router)
+app.include_router(app_config.router)
 admin_routes.install(app)
 
 

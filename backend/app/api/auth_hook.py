@@ -9,9 +9,12 @@ import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clients import get_redis
 from app.core.config import Settings, get_settings
+from app.core.db import get_session
+from app.services import app_settings, mailer
 from app.services.messaging import SmsProvider, build_sms
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -36,6 +39,23 @@ def verify_signature(secret: str, msg_id: str, timestamp: str, body: bytes, head
     )
 
 
+def _signed(request: Request, body: bytes, secret: str) -> bool:
+    if not secret:
+        # An empty key would let anyone compute a valid signature.
+        return False
+    headers = request.headers
+    try:
+        return verify_signature(
+            secret,
+            headers.get("webhook-id", ""),
+            headers.get("webhook-timestamp", "0"),
+            body,
+            headers.get("webhook-signature", ""),
+        )
+    except (ValueError, IndexError):
+        return False
+
+
 def _hook_error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": {"http_code": status, "message": message}}, status_code=status)
 
@@ -53,21 +73,13 @@ async def sms_hook(
     redis: Redis = Depends(get_redis),
     sms: SmsProvider = Depends(get_hook_sms),
     settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
 ) -> Any:
     body = await request.body()
-    headers = request.headers
-    try:
-        valid = verify_signature(
-            settings.supabase_sms_hook_secret,
-            headers.get("webhook-id", ""),
-            headers.get("webhook-timestamp", "0"),
-            body,
-            headers.get("webhook-signature", ""),
-        )
-    except (ValueError, IndexError):
-        valid = False
-    if not valid:
+    if not _signed(request, body, settings.supabase_sms_hook_secret):
         return _hook_error(401, "Invalid signature")
+    if not await app_settings.phone_sign_in_enabled(session):
+        return _hook_error(403, "Phone sign-in is turned off. Use email.")
 
     payload = await request.json()
     phone = payload["user"]["phone"]
@@ -83,4 +95,47 @@ async def sms_hook(
         await sms.send(phone, f"Your Dey Alert code is {otp}. It expires soon. Do not share it.")
     except httpx.HTTPError:
         return _hook_error(502, "SMS could not be sent")
+    return {}
+
+
+@router.post("/email-hook")
+async def email_hook(
+    request: Request,
+    redis: Redis = Depends(get_redis),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> Any:
+    """Supabase's Send Email hook: delivers sign-in codes through the panel's SMTP server."""
+    body = await request.body()
+    if not _signed(request, body, settings.supabase_email_hook_secret):
+        return _hook_error(401, "Invalid signature")
+
+    payload = await request.json()
+    user = payload.get("user") or {}
+    data = payload.get("email_data") or {}
+    action = data.get("email_action_type", "")
+    # An email change confirms the new address with token_new and the old one with token.
+    messages = [(user.get("email"), data.get("token"))]
+    if action == "email_change":
+        messages.append((user.get("new_email"), data.get("token_new")))
+    messages = [(address.lower(), code) for address, code in messages if address and code]
+    if not messages:
+        return _hook_error(400, "Nothing to send")
+
+    config = await mailer.load(session)
+    if config is None:
+        return _hook_error(503, "Email is not set up yet. An admin must add SMTP settings.")
+    day = datetime.now(UTC).date()
+    for address, code in messages:
+        if not await _within_cap(redis, f"cap:email:{day}", settings.email_daily_cap, 172800):
+            return _hook_error(429, "Daily email limit reached")
+        if not await _within_cap(
+            redis, f"cap:email:{address}", settings.email_per_address_hourly_cap, 3600
+        ):
+            return _hook_error(429, "Too many codes requested")
+        subject, text_body, html_body = mailer.code_email(action, code)
+        try:
+            await mailer.send(config, address, subject, text_body, html_body)
+        except mailer.MailError:
+            return _hook_error(502, "Email could not be sent")
     return {}

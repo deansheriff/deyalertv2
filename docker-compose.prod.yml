@@ -17,7 +17,8 @@ x-backend: &backend
     SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
     SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
-    SUPABASE_SMS_HOOK_SECRET: ${SUPABASE_SMS_HOOK_SECRET}
+    SUPABASE_SMS_HOOK_SECRET: ${SUPABASE_SMS_HOOK_SECRET:-}
+    SUPABASE_EMAIL_HOOK_SECRET: ${SUPABASE_EMAIL_HOOK_SECRET:-}
     FCM_SERVICE_ACCOUNT_JSON: ${FCM_SERVICE_ACCOUNT_JSON}
     TERMII_API_KEY: ${TERMII_API_KEY}
     TERMII_SENDER_ID: ${TERMII_SENDER_ID}
@@ -25,6 +26,8 @@ x-backend: &backend
     SENTRY_DSN: ${SENTRY_DSN:-}
     ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
     SMS_FALLBACK_ENABLED: ${SMS_FALLBACK_ENABLED:-false}
+    ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-}
+    ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-}
   depends_on:
     redis:
       condition: service_healthy
@@ -33,7 +36,8 @@ services:
   migrate:
     <<: *backend
     restart: "no"
-    command: alembic upgrade head
+    # The admin seed only creates a missing account and never fails the deploy.
+    command: ["sh", "-c", "alembic upgrade head && python -m data.seed_admin --from-env"]
 
   api:
     <<: *backend

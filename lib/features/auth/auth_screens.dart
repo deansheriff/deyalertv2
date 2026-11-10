@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/i18n.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
 
 String? normalizeNigerianPhone(String input) {
@@ -22,23 +23,42 @@ String? normalizeNigerianPhone(String input) {
   return '+234$local';
 }
 
-class PhoneScreen extends ConsumerStatefulWidget {
-  const PhoneScreen({super.key});
-
-  @override
-  ConsumerState<PhoneScreen> createState() => _PhoneScreenState();
+String? normalizeEmail(String input) {
+  final email = input.trim().toLowerCase();
+  return RegExp(r'^[^@\s]+@[^@\s]+\.[a-z]{2,}$').hasMatch(email) ? email : null;
 }
 
-class _PhoneScreenState extends ConsumerState<PhoneScreen> {
-  final _phone = TextEditingController();
+class SignInScreen extends ConsumerStatefulWidget {
+  const SignInScreen({super.key});
+
+  @override
+  ConsumerState<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends ConsumerState<SignInScreen> {
+  final _input = TextEditingController();
+  bool _usePhone = false;
   bool _agreed = false;
   bool _busy = false;
   String? _error;
 
+  SignInTarget? _target() {
+    if (_usePhone) {
+      final phone = normalizeNigerianPhone(_input.text);
+      return phone == null ? null : SignInTarget.phone(phone);
+    }
+    final email = normalizeEmail(_input.text);
+    return email == null ? null : SignInTarget.email(email);
+  }
+
   Future<void> _send() async {
-    final phone = normalizeNigerianPhone(_phone.text);
-    if (phone == null) {
-      setState(() => _error = 'Enter a valid Nigerian mobile number.');
+    final target = _target();
+    if (target == null) {
+      setState(
+        () => _error = _usePhone
+            ? 'Enter a valid Nigerian mobile number.'
+            : 'Enter a valid email address.',
+      );
       return;
     }
     setState(() {
@@ -46,8 +66,8 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
       _error = null;
     });
     try {
-      await ref.read(repositoryProvider).sendCode(phone);
-      if (mounted) unawaited(context.push('/otp', extra: phone));
+      await ref.read(repositoryProvider).sendCode(target);
+      if (mounted) unawaited(context.push('/verify', extra: target));
     } on AuthException catch (error) {
       setState(
         () => _error = error.statusCode == '429'
@@ -61,58 +81,80 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
     }
   }
 
+  void _switchMethod() => setState(() {
+    _usePhone = !_usePhone;
+    _input.clear();
+    _error = null;
+  });
+
   @override
   void dispose() {
-    _phone.dispose();
+    _input.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => DeyPage(
-    bottom: PillButton(
-      t('Send code'),
-      glow: true,
-      busy: _busy,
-      onPressed: _agreed ? _send : null,
-    ),
-    children: [
-      Heading(
-        t('Enter your phone number'),
-        subtitle: 'We send a code by SMS to confirm this is your number.',
+  Widget build(BuildContext context) {
+    // Email always works; the server says whether admins have switched phone on.
+    final phoneAllowed = ref.watch(signInMethodsProvider).value?.contains('phone') ?? false;
+    final usePhone = _usePhone && phoneAllowed;
+    return DeyPage(
+      bottom: PillButton(
+        t('Send code'),
+        glow: true,
+        busy: _busy,
+        onPressed: _agreed ? _send : null,
       ),
-      const SizedBox(height: 24),
-      TextField(
-        controller: _phone,
-        keyboardType: TextInputType.phone,
-        decoration: InputDecoration(
-          prefixText: '+234  ',
-          hintText: '802 345 6789',
-          errorText: _error,
+      children: [
+        Heading(
+          usePhone ? t('Enter your phone number') : t('Enter your email'),
+          subtitle: usePhone
+              ? 'We send a code by SMS to confirm this is your number.'
+              : 'We send a 6-digit code to confirm this is your email.',
         ),
-      ),
-      const SizedBox(height: 12),
-      CheckboxListTile(
-        contentPadding: EdgeInsets.zero,
-        controlAffinity: ListTileControlAffinity.leading,
-        value: _agreed,
-        onChanged: (value) => setState(() => _agreed = value ?? false),
-        title: const Text('I agree to the Terms of Service and Privacy Policy.'),
-      ),
-      const Meta('Standard SMS rates may apply.'),
-    ],
-  );
+        const SizedBox(height: 24),
+        TextField(
+          key: ValueKey(usePhone),
+          controller: _input,
+          keyboardType: usePhone ? TextInputType.phone : TextInputType.emailAddress,
+          autocorrect: false,
+          autofillHints: [if (usePhone) AutofillHints.telephoneNumber else AutofillHints.email],
+          decoration: InputDecoration(
+            prefixText: usePhone ? '+234  ' : null,
+            hintText: usePhone ? '802 345 6789' : 'you@example.com',
+            errorText: _error,
+          ),
+        ),
+        if (phoneAllowed)
+          TextButton(
+            style: TextButton.styleFrom(alignment: Alignment.centerLeft, padding: EdgeInsets.zero),
+            onPressed: _switchMethod,
+            child: Text(usePhone ? 'Use email instead' : 'Use phone number instead'),
+          ),
+        const SizedBox(height: 12),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          value: _agreed,
+          onChanged: (value) => setState(() => _agreed = value ?? false),
+          title: const Text('I agree to the Terms of Service and Privacy Policy.'),
+        ),
+        if (usePhone) const Meta('Standard SMS rates may apply.'),
+      ],
+    );
+  }
 }
 
-class OtpScreen extends ConsumerStatefulWidget {
-  const OtpScreen({required this.phone, super.key});
+class VerifyCodeScreen extends ConsumerStatefulWidget {
+  const VerifyCodeScreen({required this.target, super.key});
 
-  final String phone;
+  final SignInTarget target;
 
   @override
-  ConsumerState<OtpScreen> createState() => _OtpScreenState();
+  ConsumerState<VerifyCodeScreen> createState() => _VerifyCodeScreenState();
 }
 
-class _OtpScreenState extends ConsumerState<OtpScreen> {
+class _VerifyCodeScreenState extends ConsumerState<VerifyCodeScreen> {
   final _code = TextEditingController();
   Timer? _timer;
   int _seconds = 60;
@@ -143,7 +185,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       _error = null;
     });
     try {
-      await ref.read(repositoryProvider).verifyCode(widget.phone, _code.text);
+      await ref.read(repositoryProvider).verifyCode(widget.target, _code.text);
     } on AuthException {
       setState(() => _error = 'That code is not right. Try again.');
     } on Exception {
@@ -154,7 +196,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   }
 
   Future<void> _resend() async {
-    await ref.read(repositoryProvider).sendCode(widget.phone);
+    await ref.read(repositoryProvider).sendCode(widget.target);
     setState(_startTimer);
   }
 
@@ -166,52 +208,55 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => DeyPage(
-    bottom: PillButton(
-      'Verify and continue',
-      glow: true,
-      busy: _busy,
-      onPressed: _code.text.length == 6 ? _verify : null,
-    ),
-    children: [
-      Heading(
-        t('Verify phone number'),
-        subtitle: 'Enter the 6-digit code sent to ${widget.phone}.',
+  Widget build(BuildContext context) {
+    final phone = widget.target.isPhone;
+    return DeyPage(
+      bottom: PillButton(
+        'Verify and continue',
+        glow: true,
+        busy: _busy,
+        onPressed: _code.text.length == 6 ? _verify : null,
       ),
-      TextButton(
-        style: TextButton.styleFrom(
-          alignment: Alignment.centerLeft,
-          padding: EdgeInsets.zero,
+      children: [
+        Heading(
+          phone ? t('Verify phone number') : t('Check your email'),
+          subtitle: 'Enter the 6-digit code sent to ${widget.target.value}.',
         ),
-        onPressed: () => context.pop(),
-        child: const Text('Change number'),
-      ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _code,
-        autofocus: true,
-        maxLength: 6,
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (_) => setState(() {}),
-        style: const TextStyle(
-          fontSize: 28,
-          letterSpacing: 14,
-          fontFeatures: [FontFeature.tabularFigures()],
+        TextButton(
+          style: TextButton.styleFrom(alignment: Alignment.centerLeft, padding: EdgeInsets.zero),
+          onPressed: () => context.pop(),
+          child: Text(phone ? 'Change number' : 'Change email'),
         ),
-        decoration: InputDecoration(counterText: '', errorText: _error),
-      ),
-      const SizedBox(height: 16),
-      if (_seconds > 0)
-        Meta('Resend code in 00:${_seconds.toString().padLeft(2, '0')}')
-      else
-        TextButton(onPressed: _resend, child: const Text('Resend code')),
-      const SizedBox(height: 8),
-      const Text(
-        'Standard SMS rates may apply.',
-        style: TextStyle(color: DeyTokens.darkSecondaryText, fontSize: 12),
-      ),
-    ],
-  );
+        const SizedBox(height: 12),
+        TextField(
+          controller: _code,
+          autofocus: true,
+          maxLength: 6,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (_) => setState(() {}),
+          style: const TextStyle(
+            fontSize: 28,
+            letterSpacing: 14,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+          decoration: InputDecoration(counterText: '', errorText: _error),
+        ),
+        const SizedBox(height: 16),
+        if (_seconds > 0)
+          Meta('Resend code in 00:${_seconds.toString().padLeft(2, '0')}')
+        else
+          TextButton(onPressed: _resend, child: const Text('Resend code')),
+        const SizedBox(height: 8),
+        Text(
+          phone
+              ? 'Standard SMS rates may apply.'
+              : 'No email? Check your spam or promotions folder.',
+          style: const TextStyle(color: DeyTokens.darkSecondaryText, fontSize: 12),
+        ),
+      ],
+    );
+  }
 }

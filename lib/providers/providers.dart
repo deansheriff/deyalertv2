@@ -59,6 +59,10 @@ class AppState extends ChangeNotifier {
   void authChanged() => notifyListeners();
 }
 
+final signInMethodsProvider = FutureProvider.autoDispose<List<String>>(
+  (ref) => ref.read(repositoryProvider).signInMethods(),
+);
+
 final profileProvider = FutureProvider.autoDispose<UserProfile>(
   (ref) => ref.watch(repositoryProvider).profile(),
 );

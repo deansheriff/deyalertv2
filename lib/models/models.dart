@@ -132,11 +132,12 @@ class IncidentMedia {
 
 class UserProfile {
   const UserProfile({
-    required this.phone,
     required this.role,
     required this.language,
     required this.alertRadiusKm,
     required this.smsAlertsOptIn,
+    this.phone,
+    this.email,
     this.displayName,
     this.homeLat,
     this.homeLng,
@@ -147,7 +148,8 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
-    phone: json['phone'] as String,
+    phone: json['phone'] as String?,
+    email: json['email'] as String?,
     role: json['role'] as String,
     language: json['language'] as String,
     alertRadiusKm: (json['alert_radius_km'] as num).toDouble(),
@@ -161,7 +163,8 @@ class UserProfile {
     quietEnd: json['quiet_hours_end'] as String?,
   );
 
-  final String phone;
+  final String? phone;
+  final String? email;
   final String role;
   final String language;
   final double alertRadiusKm;
@@ -252,4 +255,13 @@ class FeedResult {
   final DateTime? cachedAt;
 
   bool get isCached => cachedAt != null;
+}
+
+/// Where a sign-in code goes: an email address, or a phone number when admins allow it.
+class SignInTarget {
+  const SignInTarget.email(this.value) : isPhone = false;
+  const SignInTarget.phone(this.value) : isPhone = true;
+
+  final String value;
+  final bool isPhone;
 }

@@ -193,7 +193,12 @@ async def fan_out(
             tokens += [device.fcm_token for device in user_devices]
             recipients += 1
 
-            if decision.sms and first.sms_alerts_opt_in and settings.sms_fallback_enabled:
+            if (
+                decision.sms
+                and first.phone
+                and first.sms_alerts_opt_in
+                and settings.sms_fallback_enabled
+            ):
                 await _sms_fallback(
                     session, settings, sms, redis, user_id, first.phone, incident, body
                 )

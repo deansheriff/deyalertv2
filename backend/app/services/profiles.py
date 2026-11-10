@@ -10,7 +10,7 @@ from app.core.errors import ApiError
 from app.core.security import AuthUser
 
 PROFILE_COLUMNS = """
-    id, phone, display_name, role, language, alert_radius_km, location_precision,
+    id, phone, email, display_name, role, language, alert_radius_km, location_precision,
     reputation_score, quiet_hours_start, quiet_hours_end, is_active, created_at,
     home_lga_id, home_ward_id, sms_alerts_opt_in,
     ST_Y(home_point::geometry) AS home_lat, ST_X(home_point::geometry) AS home_lng
@@ -48,9 +48,18 @@ async def load_or_create(session: AsyncSession, user: AuthUser) -> Profile:
         )
     ).first()
     if row is None:
+        if not user.phone and not user.email:
+            raise ApiError(403, "contact_required", "A verified email or phone number is required")
         await session.execute(
-            text("INSERT INTO profiles (id, phone) VALUES (:id, :phone) ON CONFLICT DO NOTHING"),
-            {"id": user.id, "phone": normalize_phone(user.phone)},
+            text(
+                "INSERT INTO profiles (id, phone, email) VALUES (:id, :phone, :email) "
+                "ON CONFLICT DO NOTHING"
+            ),
+            {
+                "id": user.id,
+                "phone": normalize_phone(user.phone) if user.phone else None,
+                "email": user.email,
+            },
         )
         await session.commit()
         row = (
@@ -79,6 +88,7 @@ async def profile_json(session: AsyncSession, user_id: UUID) -> dict[str, Any]:
     return {
         "id": str(row.id),
         "phone": row.phone,
+        "email": row.email,
         "display_name": row.display_name,
         "role": row.role,
         "language": row.language,

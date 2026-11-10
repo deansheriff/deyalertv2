@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS auth.users (
     phone TEXT UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
 
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql STABLE AS $$
     SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;

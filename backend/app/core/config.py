@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
     supabase_sms_hook_secret: str = ""
+    supabase_email_hook_secret: str = ""
     media_quarantine_bucket: str = "quarantine"
     media_public_bucket: str = "incident-media"
 
@@ -26,6 +27,10 @@ class Settings(BaseSettings):
     termii_sender_id: str = ""
     termii_base_url: str = "https://v3.api.termii.com"
     sentry_dsn: str = ""
+
+    # Each deploy creates this panel admin if the account does not exist yet.
+    admin_seed_email: str = ""
+    admin_seed_password: str = ""
 
     corroboration_radius_m: int = 2000
     corroboration_threshold: int = 3
@@ -37,6 +42,8 @@ class Settings(BaseSettings):
     new_account_daily_report_cap: int = 3
     otp_daily_cap: int = 2000
     otp_per_phone_hourly_cap: int = 5
+    email_daily_cap: int = 2000
+    email_per_address_hourly_cap: int = 5
     sms_daily_cap: int = 2000
     sms_fallback_enabled: bool = False
     push_hourly_cap: int = 5
@@ -48,7 +55,7 @@ REQUIRED_IN_PRODUCTION = (
     "supabase_url",
     "supabase_anon_key",
     "supabase_service_role_key",
-    "supabase_sms_hook_secret",
+    "supabase_email_hook_secret",
     "fcm_service_account_json",
     "termii_api_key",
     "termii_sender_id",

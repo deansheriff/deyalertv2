@@ -76,10 +76,24 @@ class Repository {
   }
 
   // Auth
-  Future<void> sendCode(String phone) => _db.auth.signInWithOtp(phone: phone);
+  /// Sign-in methods the server allows. Email always works; admins switch phone on.
+  Future<List<String>> signInMethods() async {
+    try {
+      final config = await _call<Map<String, dynamic>>(() => _dio.get('/v1/config'));
+      final methods = (config['sign_in_methods'] as List?)?.cast<String>() ?? const [];
+      return methods.contains('email') ? methods : ['email', ...methods];
+    } on ApiException {
+      return const ['email'];
+    }
+  }
 
-  Future<void> verifyCode(String phone, String code) =>
-      _db.auth.verifyOTP(phone: phone, token: code, type: OtpType.sms);
+  Future<void> sendCode(SignInTarget target) => target.isPhone
+      ? _db.auth.signInWithOtp(phone: target.value)
+      : _db.auth.signInWithOtp(email: target.value);
+
+  Future<void> verifyCode(SignInTarget target, String code) => target.isPhone
+      ? _db.auth.verifyOTP(phone: target.value, token: code, type: OtpType.sms)
+      : _db.auth.verifyOTP(email: target.value, token: code, type: OtpType.email);
 
   bool get signedIn => _db.auth.currentSession != null;
 

@@ -16,6 +16,7 @@ from app.core.clients import get_queue, get_redis, hit_limit
 from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.errors import ApiError
+from app.services import app_settings, mailer
 from app.services import incidents as incident_service
 from app.services.incidents import audit
 
@@ -344,7 +345,8 @@ async def reporter_lookup(
     row = (
         await session.execute(
             text(
-                "SELECT p.phone, p.display_name FROM incident_reporters r "
+                "SELECT COALESCE(p.phone, p.email) AS contact, p.display_name "
+                "FROM incident_reporters r "
                 "JOIN profiles p ON p.id = r.reporter_id WHERE r.incident_id = :id"
             ),
             {"id": incident_id},
@@ -352,7 +354,7 @@ async def reporter_lookup(
     ).first()
     await audit(session, admin.profile.id, "reporter_lookup", "incident", str(incident_id), reason)
     await session.commit()
-    value = f"{row.display_name or 'No name'} ({row.phone})" if row else "Account deleted"
+    value = f"{row.display_name or 'No name'} ({row.contact})" if row else "Account deleted"
     return _page(
         request, admin, "revealed.html", title="Reporter", value=value,
         back=f"/admin/incidents/{incident_id}",
@@ -450,8 +452,11 @@ async def toggle_verifier(
     return _back("/admin/verifiers")
 
 
-def _mask(phone: str | None) -> str:
+def _mask(phone: str | None, email: str | None = None) -> str:
     if not phone:
+        if email and "@" in email:
+            name, domain = email.split("@", 1)
+            return f"{name[:2]}***@{domain}"
         return "Email sign-in"
     return f"{phone[:7]}****{phone[-2:]}" if len(phone) > 9 else "****"
 
@@ -467,9 +472,11 @@ async def users(
         await session.execute(
             text(
                 """
-                SELECT p.id, p.phone, p.display_name, p.role, p.is_active, w.name AS ward
+                SELECT p.id, p.phone, p.email, p.display_name, p.role, p.is_active,
+                       w.name AS ward
                 FROM profiles p LEFT JOIN wards w ON w.id = p.home_ward_id
                 WHERE :q = '' OR p.phone LIKE '%' || :q || '%'
+                    OR p.email ILIKE '%' || :q || '%'
                     OR p.display_name ILIKE '%' || :q || '%'
                 ORDER BY p.created_at DESC LIMIT 100
                 """
@@ -477,7 +484,7 @@ async def users(
             {"q": q},
         )
     ).all()
-    items = [{**row._mapping, "phone": _mask(row.phone)} for row in rows]
+    items = [{**row._mapping, "phone": _mask(row.phone, row.email)} for row in rows]
     return _page(request, admin, "users.html", items=items, q=q)
 
 
@@ -522,12 +529,13 @@ async def audit_log(
     return _page(request, admin, "audit.html", rows=rows, action=action)
 
 
-@router.get("/settings", response_class=HTMLResponse)
-async def platform_settings(
+async def _settings_page(
     request: Request,
-    admin: Admin = Depends(auth.current_admin),
-    session: AsyncSession = Depends(get_session),
-    redis: Redis = Depends(get_redis),
+    admin: Admin,
+    session: AsyncSession,
+    redis: Redis,
+    status_code: int = 200,
+    **extra: Any,
 ) -> HTMLResponse:
     types = (
         await session.execute(
@@ -535,7 +543,7 @@ async def platform_settings(
         )
     ).all()
     day = datetime.now(UTC).date()
-    return _page(
+    page = _page(
         request,
         admin,
         "settings.html",
@@ -544,6 +552,104 @@ async def platform_settings(
         sms_on=await redis.get(SMS_OFF_FLAG) is None,
         otp_today=int(await redis.get(f"cap:otp:{day}") or 0),
         sms_today=int(await redis.get(f"cap:sms:{day}") or 0),
+        email_today=int(await redis.get(f"cap:email:{day}") or 0),
+        phone_sign_in=await app_settings.phone_sign_in_enabled(session),
+        smtp=mailer.summary(await app_settings.get(session, app_settings.SMTP)),
+        security_modes=mailer.SECURITY_MODES,
+        **{"smtp_notice": None, "smtp_error": None, **extra},
+    )
+    page.status_code = status_code
+    return page
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def platform_settings(
+    request: Request,
+    admin: Admin = Depends(auth.current_admin),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> HTMLResponse:
+    return await _settings_page(request, admin, session, redis)
+
+
+@router.post("/settings/sign-in")
+async def toggle_phone_sign_in(
+    enable: str = Form(),
+    admin: Admin = Depends(auth.require_full_admin),
+    session: AsyncSession = Depends(get_session),
+) -> RedirectResponse:
+    await app_settings.put(session, app_settings.PHONE_SIGN_IN, enable == "yes", admin.profile.id)
+    await audit(session, admin.profile.id, f"phone_sign_in:{enable}", "settings", "sign_in")
+    await session.commit()
+    return _back("/admin/settings")
+
+
+@router.post("/settings/smtp", response_class=HTMLResponse)
+async def save_smtp(
+    request: Request,
+    host: str = Form(),
+    port: int = Form(ge=1, le=65535),
+    security: str = Form(),
+    username: str = Form(default=""),
+    password: str = Form(default=""),
+    from_email: str = Form(),
+    from_name: str = Form(default="Dey Alert"),
+    admin: Admin = Depends(auth.require_full_admin),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> HTMLResponse:
+    if security not in mailer.SECURITY_MODES or "@" not in from_email:
+        return await _settings_page(
+            request, admin, session, redis, 400, smtp_error="Check the security mode and sender."
+        )
+    if not password:
+        # A blank password field keeps the one already saved.
+        current = await mailer.load(session)
+        password = current.password if current else ""
+    config = mailer.SmtpConfig(
+        host=host.strip(),
+        port=port,
+        username=username.strip(),
+        password=password,
+        from_email=from_email.strip(),
+        from_name=from_name.strip() or "Dey Alert",
+        security=security,
+    )
+    await mailer.save(session, config, admin.profile.id)
+    await audit(session, admin.profile.id, "smtp_change", "settings", "smtp", config.host)
+    await session.commit()
+    return await _settings_page(
+        request, admin, session, redis, smtp_notice="SMTP settings saved. Send a test email."
+    )
+
+
+@router.post("/settings/smtp/test", response_class=HTMLResponse)
+async def test_smtp(
+    request: Request,
+    to: str = Form(),
+    admin: Admin = Depends(auth.require_full_admin),
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> HTMLResponse:
+    try:
+        await hit_limit(redis, f"rl:smtp_test:{admin.profile.id}", 10, 3600)
+    except ApiError:
+        return await _settings_page(
+            request, admin, session, redis, 429, smtp_error="Too many test emails. Wait an hour."
+        )
+    config = await mailer.load(session)
+    if config is None:
+        return await _settings_page(
+            request, admin, session, redis, 400, smtp_error="Save SMTP settings first."
+        )
+    _, body, html = mailer.code_email("signup", "123456")
+    intro = "This is a test from the Dey Alert admin panel. Sign-in emails look like this:"
+    try:
+        await mailer.send(config, to.strip(), "Dey Alert test email", f"{intro}\n\n{body}", html)
+    except mailer.MailError as error:
+        return await _settings_page(request, admin, session, redis, 502, smtp_error=str(error))
+    return await _settings_page(
+        request, admin, session, redis, smtp_notice=f"Test email sent to {to.strip()}."
     )
 
 

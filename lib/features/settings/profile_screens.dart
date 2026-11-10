@@ -176,7 +176,7 @@ class ProfileTab extends ConsumerWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 112),
         children: [
-          Heading(profile?.displayName ?? t('Profile'), subtitle: profile?.phone),
+          Heading(profile?.displayName ?? t('Profile'), subtitle: profile?.phone ?? profile?.email),
           const SizedBox(height: 18),
           _Row(
             'Alert radius',
@@ -236,14 +236,16 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 10),
-          _Row(
-            'SMS alerts',
-            subtitle: 'Opt in to SMS for confirmed critical incidents',
-            trailing: Switch(
-              value: profile.smsAlertsOptIn,
-              onChanged: (value) => _update(ref, context, {'sms_alerts_opt_in': value}),
+          // SMS alerts need a phone number, which email sign-in accounts do not have.
+          if (profile.phone != null)
+            _Row(
+              'SMS alerts',
+              subtitle: 'Opt in to SMS for confirmed critical incidents',
+              trailing: Switch(
+                value: profile.smsAlertsOptIn,
+                onChanged: (value) => _update(ref, context, {'sms_alerts_opt_in': value}),
+              ),
             ),
-          ),
           _Row(
             'Quiet hours',
             subtitle: profile.quietStart == null

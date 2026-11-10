@@ -9,7 +9,9 @@ import 'package:dey_alert/features/map/map_tab.dart';
 import 'package:dey_alert/features/sos/sos_screens.dart';
 import 'package:dey_alert/main.dart';
 import 'package:dey_alert/models/models.dart';
+import 'package:dey_alert/providers/providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class MemoryStore implements QueueStore {
@@ -224,6 +226,39 @@ void main() {
     expect(find.text('Phone number').hitTestable(), findsOneWidget);
   });
 
+  group('email sign-in', () {
+    test('accepts and tidies real addresses', () {
+      expect(normalizeEmail('  Ada@Example.com '), 'ada@example.com');
+      for (final input in ['ada', 'ada@', 'ada@example', 'a b@example.com', '']) {
+        expect(normalizeEmail(input), isNull);
+      }
+    });
+
+    Future<void> showSignIn(WidgetTester tester, List<String> methods) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [signInMethodsProvider.overrideWith((ref) async => methods)],
+          child: MaterialApp(theme: AppTheme.dark, home: const SignInScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('asks for an email and hides phone until admins allow it', (tester) async {
+      await showSignIn(tester, ['email']);
+      expect(find.text('Enter your email'), findsOneWidget);
+      expect(find.text('Use phone number instead'), findsNothing);
+    });
+
+    testWidgets('offers phone when the server allows it', (tester) async {
+      await showSignIn(tester, ['email', 'phone']);
+      await tester.tap(find.text('Use phone number instead'));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter your phone number'), findsOneWidget);
+      expect(find.text('Use email instead'), findsOneWidget);
+    });
+  });
+
   group('phone numbers', () {
     test('accepts common Nigerian formats', () {
       for (final input in ['08023456789', '8023456789', '+2348023456789', '234 802 345 6789']) {
@@ -262,13 +297,13 @@ void main() {
     test('walks through setup in order', () {
       expect(gate('/map', language: false), '/language');
       expect(gate('/map', onboarded: false), '/welcome');
-      expect(gate('/map', signedIn: false), '/phone');
+      expect(gate('/map', signedIn: false), '/sign-in');
       expect(gate('/map', profile: false), '/permissions/location');
       expect(gate('/map'), isNull);
     });
 
     test('signed-in users cannot return to setup', () {
-      expect(gate('/phone'), '/map');
+      expect(gate('/sign-in'), '/map');
     });
 
     test('battery guide stays reachable from settings', () {

@@ -16,6 +16,7 @@ SERVER_ONLY_TABLES = [
     "sos_deliveries",
     "notification_log",
     "audit_log",
+    "app_settings",
 ]
 
 CLIENT_READ_OBJECTS = [

@@ -28,7 +28,7 @@ String? gateRedirect({
   if (!languageChosen) return location == '/language' ? null : '/language';
   if (!onboarded) return location == '/welcome' ? null : '/welcome';
   if (!signedIn) {
-    return location == '/phone' || location == '/otp' ? null : '/phone';
+    return location == '/sign-in' || location == '/verify' ? null : '/sign-in';
   }
   if (!profileDone) {
     const allowed = {
@@ -43,8 +43,8 @@ String? gateRedirect({
   const setup = {
     '/language',
     '/welcome',
-    '/phone',
-    '/otp',
+    '/sign-in',
+    '/verify',
     '/permissions/location',
     '/permissions/notifications',
     '/profile-setup',
@@ -66,10 +66,11 @@ GoRouter buildRouter(AppState state, Repository repository) => GoRouter(
   routes: [
     GoRoute(path: '/language', builder: (_, _) => const LanguageScreen()),
     GoRoute(path: '/welcome', builder: (_, _) => const WelcomeScreen()),
-    GoRoute(path: '/phone', builder: (_, _) => const PhoneScreen()),
+    GoRoute(path: '/sign-in', builder: (_, _) => const SignInScreen()),
     GoRoute(
-      path: '/otp',
-      builder: (_, routerState) => OtpScreen(phone: routerState.extra! as String),
+      path: '/verify',
+      builder: (_, routerState) =>
+          VerifyCodeScreen(target: routerState.extra! as SignInTarget),
     ),
     GoRoute(
       path: '/permissions/location',
