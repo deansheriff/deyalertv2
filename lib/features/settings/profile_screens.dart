@@ -13,6 +13,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/ui.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../community/community_screens.dart';
 import '../onboarding/onboarding_screens.dart';
 import '../report/report_screens.dart';
 
@@ -178,13 +179,26 @@ class ProfileTab extends ConsumerWidget {
         children: [
           Heading(profile?.displayName ?? t('Profile'), subtitle: profile?.phone ?? profile?.email),
           const SizedBox(height: 18),
+          const SanctionNotice(),
           _Row(
             'Alert radius',
             subtitle: profile == null ? null : '${profile.alertRadiusKm.round()} km',
             onTap: () => context.push('/settings'),
           ),
+          _Row(
+            t('Watch zones'),
+            subtitle: 'Alerts for home, work or school',
+            onTap: () => context.push('/zones'),
+          ),
           _Row('My reports', onTap: () => context.push('/my-reports')),
           _Row('Notifications', onTap: () => context.push('/notifications')),
+          if (profile != null && profile.role == 'member')
+            _Row(
+              t('Become a verifier'),
+              subtitle: 'Confirm what is happening in your ward',
+              onTap: () => context.push('/verifier/apply'),
+            ),
+          _Row(t('Contact support'), onTap: () => context.push('/support')),
           _Row(t('Settings'), onTap: () => context.push('/settings')),
           const SizedBox(height: 8),
           PillButton(
@@ -270,6 +284,7 @@ class SettingsScreen extends ConsumerWidget {
         ),
         _Row('Keep alerts active', subtitle: 'Battery settings', onTap: () => context.push('/permissions/battery')),
         _Row('Your data', onTap: () => context.push('/settings/account')),
+        _Row(t('Correct my data'), onTap: () => context.push('/settings/correction')),
         _Row('Terms and privacy', onTap: () => context.push('/legal')),
       ],
     );

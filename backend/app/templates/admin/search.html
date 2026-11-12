@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, severity, status, role, empty %}
+{% block title %}Search{% endblock %}
+{% block heading %}Search{% endblock %}
+{% block subheading %}<div class="sub">Results for “{{ q }}”</div>{% endblock %}
+{% block body %}
+{% if q|length < 2 %}{{ empty("Type at least two characters", "Search by incident ID, description, place, ward, LGA, name or email.") }}{% else %}
+<div class="card"><h2>{{ icon("incident", 16) }}Incidents <span class="pill">{{ incidents|length }}</span></h2>
+{% if incidents %}<div class="table-wrap"><table><thead><tr><th>Severity</th><th>Type</th><th>Place</th><th>Status</th><th>Reported</th></tr></thead><tbody>
+{% for item in incidents %}<tr><td>{{ severity(item.severity) }}</td><td><a class="link" href="/admin/incidents/{{ item.id }}">{{ item.label }}</a><div class="faint small mono">{{ item.id|string|truncate(8, True, "") }}</div></td><td>{{ item.location_name or item.ward or item.lga or "—" }}</td><td>{{ status(item.status) }}</td><td class="muted">{{ item.created_at|ago }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">No incidents match.</p>{% endif %}</div>
+{% if places %}<div class="card"><h2>{{ icon("area", 16) }}Wards</h2><div class="row">{% for place in places %}<a class="pill" href="/admin/incidents?ward={{ place.id }}">{{ place.name }} · {{ place.lga }}</a>{% endfor %}</div></div>{% endif %}
+{% if admin.can("view_users") %}<div class="card"><h2>{{ icon("users", 16) }}People <span class="pill">{{ people|length }}</span></h2>
+{% if people %}<div class="list">{% for person in people %}<a href="/admin/users/{{ person.id }}"><span class="avatar">{{ (person.display_name or "?")[:1]|upper }}</span><div class="grow"><div style="font-weight:600">{{ person.display_name or "No name" }}</div><div class="faint small">Open the profile to see contact details</div></div>{{ role(person.role) }}</a>{% endfor %}</div>
+{% else %}<p class="muted">{% if q|length < 3 %}Type three characters to search people.{% else %}No people match.{% endif %}</p>{% endif %}</div>{% endif %}
+{% endif %}
+{% endblock %}

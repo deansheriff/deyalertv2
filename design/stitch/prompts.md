@@ -92,3 +92,29 @@ Overlays must not cover map pins or their labels, and map controls use one row a
 | DA-P03 | Contact opt-in | 3 | Page opened from an SMS: "Name wants to add you as a trusted contact for emergencies", what you would receive, Accept and Decline buttons, link to privacy information. |
 | DA-P04 | Opt-in result | 3 | Confirmation for accepted and declined, with how to withdraw consent later. |
 | DA-P05 | Privacy and terms layout | 1 | Readable long-form legal page template with a table of contents, section headings, a last-updated date, and a language switcher. |
+
+## Phase 5: platform expansion (2026-11-10)
+
+All on design system `assets/14479210342777017401`. Each brief asked for the dark near-black base, neon lime only for the main action and active nav item, Inter, 20 px cards, pill controls, and severity colours that always come with an icon and a label.
+
+| ID | Brief |
+|----|-------|
+| DA-W12 | Admin sign-in, split layout: brand panel with logo, "Community safety, coordinated.", soft severity dots and three live stat chips; sign-in card with email, password with show toggle, lime "Sign in", "Ask a super admin to reset it", audit and rate-limit footer. |
+| DA-W13 | Panel shell and dashboard: grouped sidebar (Overview, Moderation, Communication, Network, Admin) with counts and a staff card with role pill; top search and "New broadcast"; KPI row, needs-attention list, incidents by type, system status. |
+| DA-W14 | Staff: Active, Invited and Disabled tabs; role, area scope, last sign-in, two-step; invite drawer with role, areas and "Require two-step sign-in". |
+| DA-W15 | Roles and permissions matrix grouped by area, super admin column locked on, sensitive permissions marked, sticky save bar. |
+| DA-W16 | Audit log for super admins: chain-verified chip, CSV export, filters, expandable rows with details and entry hash. |
+| DA-W17 | Moderation queue v2: filters, bulk action bar, claim, waiting time in amber and red, word-filter holds. |
+| DA-W18 | Incident detail v2: timeline, photos, internal notes, public updates, action card, possible duplicates with merge, sensitive actions needing a reason. |
+| DA-W19 | Broadcasts: composer with area, channels and reach estimate; two-person approval list with delivery stats. |
+| DA-W20 | Analytics: range pills, KPI deltas, incidents per day by severity, by type, by LGA, outcomes, delivery, weekly report. |
+| DA-W21 | System health: service status grid, scheduled jobs, kill switches, editable limits. |
+| DA-W22 | User detail: reason gate, reports, flags, devices, SOS history, sanctions with appeals, reputation history. |
+| DA-W23 | Partners and webhooks: organisations with scope, signed webhooks, rotate secret, recent deliveries with retry. |
+| DA-W24 | Support inbox (two-pane) and NDPA privacy requests with due dates. |
+| DA-W25 | Live map: full-height dark map, floating filters, heat toggle, selected incident panel, ring legend. |
+| DA-W26 | Settings sub-pages: incident types, word filter, boundary upload. |
+| DA-M38 | Watch zones list with toggles, lime "Add a zone", limit of five. |
+| DA-M39 | Contact support: category chips, message, device info checkbox, your conversations. |
+| DA-M40 | Feed with an announcement card and inline verifier updates. |
+| DA-M41 | Become a verifier: what verifiers do, form, pending state. |

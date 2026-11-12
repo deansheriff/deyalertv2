@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, bars, empty, csrf_field, flash %}
+{% block title %}Analytics{% endblock %}
+{% block heading %}Analytics{% endblock %}
+{% block subheading %}<div class="sub">{% if admin.scope.all %}All areas{% else %}Your areas only{% endif %}{% if lga %} · one LGA{% endif %}</div>{% endblock %}
+{% block actions %}<a class="btn" href="/admin/analytics.csv?range={{ period }}&lga={{ lga or '' }}">{{ icon("download", 16) }}Download CSV</a>{% endblock %}
+{% block body %}
+{{ flash(notice) }}
+<form class="row" method="get" style="margin-bottom:16px">
+<div class="tabs" style="margin:0">{% for value in ["7","30","90"] %}<a class="{{ 'on' if period == value }}" href="?range={{ value }}&lga={{ lga or '' }}">{{ value }} days</a>{% endfor %}</div>
+<select name="lga" onchange="this.form.submit()"><option value="">All LGAs</option>{% for item in lgas %}<option value="{{ item.id }}" {{ "selected" if lga == item.id }}>{{ item.name }}</option>{% endfor %}</select>
+<input type="hidden" name="range" value="{{ period }}">
+</form>
+{% set k = data.kpis %}
+<div class="grid g3" style="margin-bottom:16px">
+<div class="kpi"><div class="label">Reports</div><b>{{ k.reports }}</b>{% if k.reports_delta is not none %}<span class="hint {{ 'up' if k.reports_delta >= 0 else 'down' }}">{{ "+" if k.reports_delta >= 0 }}{{ k.reports_delta }}% vs previous {{ period }} days</span>{% endif %}</div>
+<div class="kpi"><div class="label">Confirmed</div><b>{{ k.confirmed }}</b>{% if k.confirmed_delta is not none %}<span class="hint {{ 'up' if k.confirmed_delta >= 0 else 'down' }}">{{ "+" if k.confirmed_delta >= 0 }}{{ k.confirmed_delta }}% vs previous</span>{% endif %}</div>
+<div class="kpi"><div class="label">False-report rate</div><b>{{ k.false_rate }}%</b><span class="hint">Lower is better</span></div>
+<div class="kpi"><div class="label">Median time to confirm</div><b>{{ k.median_confirm }} min</b><span class="hint">From report to confirmation</span></div>
+<div class="kpi"><div class="label">Active users</div><b>{{ k.active_users }}</b><span class="hint">Opened the app in this period</span></div>
+<div class="kpi"><div class="label">SOS alerts</div><b>{{ k.sos }}</b><span class="hint">Started in this period</span></div>
+</div>
+<div class="card"><h2>{{ icon("chart", 16) }}Incidents per day by severity</h2>
+{% if days_list %}{% set totals = [] %}{% for i in range(days_list|length) %}{% set _ = totals.append(series.low[i] + series.medium[i] + series.high[i] + series.critical[i]) %}{% endfor %}{% set top = totals|max %}
+<div style="display:flex;align-items:flex-end;gap:3px;height:180px">{% for i in range(days_list|length) %}<div title="{{ days_list[i].strftime('%d %b') }}: {{ totals[i] }}" style="flex:1;display:flex;flex-direction:column-reverse;height:100%;justify-content:flex-start">{% for level, colour in [("low","var(--blue)"),("medium","var(--amber)"),("high","var(--orange)"),("critical","var(--red)")] %}{% if series[level][i] %}<div style="background:{{ colour }};height:{{ series[level][i] * 100 / top }}%;min-height:2px;border-radius:2px;margin-top:1px"></div>{% endif %}{% endfor %}</div>{% endfor %}</div>
+<div class="row small muted" style="margin-top:10px">{% for level, colour in [("Low","var(--blue)"),("Medium","var(--amber)"),("High","var(--orange)"),("Critical","var(--red)")] %}<span class="row" style="gap:6px"><span class="dot" style="background:{{ colour }}"></span>{{ level }}</span>{% endfor %}</div>
+{% else %}{{ empty("No reports in this period") }}{% endif %}</div>
+<div class="grid g2">
+<div class="card"><h2>{{ icon("incident", 16) }}By type</h2>{% if data.by_type %}{{ bars(data.by_type, "label", "total") }}{% else %}{{ empty("No data") }}{% endif %}</div>
+<div class="card"><h2>{{ icon("verifier", 16) }}Verification outcome</h2>{% if data.outcomes %}{% set labels = {"unconfirmed":"Unverified","corroborated":"Corroborated","confirmed":"Confirmed","under_review":"Under review","resolved":"Resolved","expired":"Expired","false_report":"False report"} %}
+<div class="bars">{% set top = data.outcomes|map(attribute="total")|max %}{% for row in data.outcomes %}<div class="bar"><span class="bar-label">{{ labels.get(row.status, row.status) }}</span><span class="bar-track"><span class="bar-fill" style="width:{{ row.total * 100 / top }}%"></span></span><span class="bar-value">{{ row.total }}</span></div>{% endfor %}</div>{% else %}{{ empty("No data") }}{% endif %}</div>
+</div>
+<div class="card"><h2>{{ icon("area", 16) }}By LGA</h2>
+{% if data.by_lga %}<div class="table-wrap"><table><thead><tr><th>LGA</th><th>Reports</th><th>Confirmed</th><th>False rate</th><th>Median to confirm</th></tr></thead><tbody>
+{% for row in data.by_lga %}<tr><td style="font-weight:600">{{ row.name }}</td><td>{{ row.reports }}</td><td>{{ row.confirmed }}</td><td>{{ ((row.false_reports * 100 / row.reports)|round(1)) if row.reports else 0 }}%</td><td>{{ row.median_minutes|int if row.median_minutes is not none else "—" }}{% if row.median_minutes is not none %} min{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty("No data") }}{% endif %}</div>
+<div class="grid g2">
+<div class="card"><h2>{{ icon("broadcast", 16) }}Push and SMS delivery</h2>
+<div class="list">
+<div><span class="grow">Incident push notifications</span><b>{{ data.delivery.get("push", 0) }}</b></div>
+<div><span class="grow">Incident SMS</span><b>{{ data.delivery.get("sms", 0) }}</b></div>
+<div><span class="grow">Broadcast push delivered</span><b>{{ data.broadcasts.push_sent }}</b></div>
+<div><span class="grow">Broadcast push failed (old devices)</span><b class="{{ 'down' if data.broadcasts.push_failed }}">{{ data.broadcasts.push_failed }}</b></div>
+<div><span class="grow">Broadcast SMS</span><b>{{ data.broadcasts.sms_sent }}</b></div>
+</div></div>
+<div class="card"><h2>{{ icon("mail", 16) }}Weekly email report</h2>
+<p class="muted small">Every Monday at 07:00, a summary of the last 7 days with the CSV attached.</p>
+{% if admin.can("manage_settings") %}<form method="post" action="/admin/analytics/weekly" class="stack">{{ csrf_field(admin) }}
+<label class="check"><input type="checkbox" name="enabled" value="true" {{ "checked" if weekly.get("enabled") }}>Send the weekly report</label>
+<label class="field">Recipients (comma separated)<input name="recipients" value="{{ weekly.get('recipients', [])|join(', ') }}" placeholder="chair@example.com, partner@example.com"></label>
+<button class="btn primary">Save</button></form>
+{% else %}<p>{{ "On" if weekly.get("enabled") else "Off" }}</p>{% endif %}</div>
+</div>
+{% endblock %}

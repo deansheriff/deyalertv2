@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, role, severity, status, csrf_field, empty %}
+{% block title %}{{ person.display_name or "User" }}{% endblock %}
+{% block heading %}{{ person.display_name or "No name" }}{% endblock %}
+{% block subheading %}<div class="sub">Opened for: {{ reason }}</div>{% endblock %}
+{% block body %}
+<div class="card row" style="gap:16px">
+<span class="avatar" style="width:52px;height:52px;font-size:20px">{{ (person.display_name or "?")[:1]|upper }}</span>
+<div class="grow"><div class="row">{{ role(person.role) }}{% if not person.is_active %}<span class="pill bad">Disabled</span>{% elif active %}<span class="pill warn">Sanctioned</span>{% else %}<span class="pill good">Active</span>{% endif %}</div>
+<div class="muted small" style="margin-top:6px">{{ person.email or "" }}{% if person.email and person.phone %} · {% endif %}{{ person.phone or "" }} · Joined {{ person.created_at|when }} · Home {{ person.ward or "not set" }}{% if person.lga %}, {{ person.lga }}{% endif %}</div></div>
+<div class="kpi" style="padding:10px 16px"><div class="label">Reputation</div><b style="font-size:24px;margin:0">{{ person.reputation_score }}</b></div>
+</div>
+<div class="split">
+<div class="card">
+<div class="tabs">{% for name, label in [("reports","Reports"),("flags","Flags"),("devices","Devices"),("sos","SOS history")] %}<a class="{{ 'on' if tab == name }}" href="?tab={{ name }}">{{ label }} ({{ data[name]|length }})</a>{% endfor %}</div>
+{% if tab == "reports" %}{% if data.reports %}<table><thead><tr><th>Type</th><th>Severity</th><th>Status</th><th>Reported</th></tr></thead><tbody>{% for row in data.reports %}<tr><td><a class="link" href="/admin/incidents/{{ row.id }}">{{ row.label }}</a></td><td>{{ severity(row.severity) }}</td><td>{{ status(row.status) }}</td><td class="muted">{{ row.created_at|ago }}</td></tr>{% endfor %}</tbody></table>{% else %}{{ empty("No reports") }}{% endif %}
+{% elif tab == "flags" %}{% if data.flags %}<table><thead><tr><th>Reason</th><th>Outcome</th><th>When</th></tr></thead><tbody>{% for row in data.flags %}<tr><td><a class="link" href="/admin/incidents/{{ row.incident_id }}">{{ row.reason|replace("_"," ")|capitalize }}</a></td><td>{{ (row.outcome or "pending")|capitalize }}</td><td class="muted">{{ row.created_at|ago }}</td></tr>{% endfor %}</tbody></table>{% else %}{{ empty("No flags") }}{% endif %}
+{% elif tab == "devices" %}{% if data.devices %}<table><thead><tr><th>Platform</th><th>App version</th><th>Status</th><th>Last seen</th></tr></thead><tbody>{% for row in data.devices %}<tr><td>{{ row.platform|capitalize }}</td><td class="mono">{{ row.app_version or "—" }}</td><td>{{ "Active" if row.is_active else "Inactive" }}</td><td class="muted">{{ row.last_seen_at|ago }}</td></tr>{% endfor %}</tbody></table>{% else %}{{ empty("No devices") }}{% endif %}
+{% else %}{% if data.sos %}<table><thead><tr><th>Status</th><th>Started</th><th>Resolved</th></tr></thead><tbody>{% for row in data.sos %}<tr><td>{{ row.status|replace("_"," ")|capitalize }}</td><td class="muted">{{ row.created_at|when }}</td><td class="muted">{{ row.resolved_at|when if row.resolved_at else "—" }}</td></tr>{% endfor %}</tbody></table>{% else %}{{ empty("No SOS alerts") }}{% endif %}{% endif %}
+</div>
+<div>
+<div class="card"><h2>{{ icon("shield", 16) }}Sanctions</h2>
+{% if sanctions %}<div class="list">{% for s in sanctions %}{% set live = s in active %}<div style="align-items:flex-start"><div class="grow"><div class="row" style="gap:6px"><span class="pill {{ 'warn' if live }}">{{ "Suspended" if s.kind == "suspend" else "Reporting paused" }}</span>{% if not live %}<span class="faint small">Ended</span>{% endif %}</div>
+<div class="small" style="margin-top:6px">{{ s.reason }}</div><div class="faint small">By {{ s.by_name or "staff" }} · {{ s.created_at|ago }}{% if s.ends_at %} · until {{ s.ends_at|when }}{% else %} · no end date{% endif %}</div>
+{% if s.appeal_status == "pending" %}<div class="note" style="margin-top:8px"><div><b class="small">Appeal</b><div class="small">{{ s.appeal_text }}</div>{% if admin.can("sanction_users") %}<form method="post" action="/admin/sanctions/{{ s.id }}/appeal" class="row" style="margin-top:8px">{{ csrf_field(admin) }}<button class="btn small primary" name="decision" value="accepted">Accept and lift</button><button class="btn small" name="decision" value="rejected">Reject</button></form>{% endif %}</div></div>{% elif s.appeal_status != "none" %}<div class="faint small">Appeal {{ s.appeal_status }}</div>{% endif %}
+{% if live and admin.can("sanction_users") %}<form method="post" action="/admin/sanctions/{{ s.id }}/lift" style="margin-top:8px">{{ csrf_field(admin) }}<button class="btn small">Lift now</button></form>{% endif %}
+</div></div>{% endfor %}</div>{% else %}<p class="muted small">No sanctions.</p>{% endif %}
+{% if admin.can("sanction_users") and person.id != admin.profile.id %}<details style="margin-top:12px"><summary>Add a sanction</summary><form method="post" action="/admin/users/{{ person.id }}/sanction" class="stack">{{ csrf_field(admin) }}
+<div class="grid g2" style="gap:8px"><select name="kind"><option value="pause_reporting">Pause reporting</option><option value="suspend">Suspend account</option></select>
+<select name="days"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="30">30 days</option><option value="0">Until lifted</option></select></div>
+<textarea name="reason" minlength="10" required placeholder="Reason the person will see (at least 10 characters)"></textarea><button class="btn danger">Apply sanction</button></form></details>{% endif %}
+</div>
+<div class="card"><h2>{{ icon("chart", 16) }}Reputation history</h2>
+{% if reputation %}<div class="list">{% for r in reputation %}<div><b class="{{ 'up' if r.change > 0 else 'down' }}">{{ "+" if r.change > 0 }}{{ r.change }}</b><div class="grow small">{{ r.reason }}<div class="faint">{{ r.actor or "System" }} · {{ r.created_at|ago }}</div></div></div>{% endfor %}</div>{% else %}<p class="muted small">No manual changes. Reputation also moves with corroborations and flags.</p>{% endif %}
+{% if admin.can("adjust_reputation") %}<form method="post" action="/admin/users/{{ person.id }}/reputation" class="row" style="margin-top:12px">{{ csrf_field(admin) }}<input type="number" name="change" min="-50" max="50" value="5" style="width:80px"><input name="reason" required minlength="5" placeholder="Reason" style="flex:1"><button class="btn">Adjust</button></form>{% endif %}
+</div>
+</div>
+</div>
+{% endblock %}

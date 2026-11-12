@@ -265,3 +265,170 @@ class SignInTarget {
   final String value;
   final bool isPhone;
 }
+
+/// A place someone wants alerts for, wherever they are.
+class WatchZone {
+  const WatchZone({
+    required this.id,
+    required this.name,
+    required this.kind,
+    required this.lat,
+    required this.lng,
+    required this.radiusM,
+    required this.isActive,
+  });
+
+  factory WatchZone.fromJson(Map<String, dynamic> json) => WatchZone(
+    id: json['id'] as int,
+    name: json['name'] as String,
+    kind: json['kind'] as String,
+    lat: (json['lat'] as num).toDouble(),
+    lng: (json['lng'] as num).toDouble(),
+    radiusM: json['radius_m'] as int,
+    isActive: json['is_active'] as bool,
+  );
+
+  final int id;
+  final String name;
+  final String kind;
+  final double lat;
+  final double lng;
+  final int radiusM;
+  final bool isActive;
+
+  Map<String, dynamic> toJson({bool? active}) => {
+    'name': name,
+    'kind': kind,
+    'lat': lat,
+    'lng': lng,
+    'radius_m': radiusM,
+    'is_active': active ?? isActive,
+  };
+}
+
+class Announcement {
+  const Announcement({required this.id, required this.title, required this.body, this.area});
+
+  factory Announcement.fromJson(Map<String, dynamic> json) => Announcement(
+    id: json['id'] as int,
+    title: json['title'] as String,
+    body: json['body'] as String,
+    area: json['area'] as String?,
+  );
+
+  final int id;
+  final String title;
+  final String body;
+  final String? area;
+}
+
+/// A public update a verifier or staff member posted on an incident.
+class IncidentUpdate {
+  const IncidentUpdate({required this.author, required this.body, required this.at});
+
+  factory IncidentUpdate.fromJson(Map<String, dynamic> json) => IncidentUpdate(
+    author: json['author'] as String,
+    body: json['body'] as String,
+    at: DateTime.parse(json['created_at'] as String),
+  );
+
+  final String author;
+  final String body;
+  final DateTime at;
+}
+
+class SupportMessage {
+  const SupportMessage({required this.fromStaff, required this.body, required this.at});
+
+  factory SupportMessage.fromJson(Map<String, dynamic> json) => SupportMessage(
+    fromStaff: json['from_staff'] as bool,
+    body: json['body'] as String,
+    at: DateTime.parse(json['created_at'] as String),
+  );
+
+  final bool fromStaff;
+  final String body;
+  final DateTime at;
+}
+
+class SupportTicket {
+  const SupportTicket({
+    required this.id,
+    required this.category,
+    required this.status,
+    required this.messages,
+  });
+
+  factory SupportTicket.fromJson(Map<String, dynamic> json) => SupportTicket(
+    id: json['id'] as int,
+    category: json['category'] as String,
+    status: json['status'] as String,
+    messages: [
+      for (final m in json['messages'] as List) SupportMessage.fromJson(m as Map<String, dynamic>),
+    ],
+  );
+
+  final int id;
+  final String category;
+  final String status;
+  final List<SupportMessage> messages;
+}
+
+class Sanction {
+  const Sanction({
+    required this.id,
+    required this.kind,
+    required this.reason,
+    required this.appealStatus,
+    this.endsAt,
+  });
+
+  factory Sanction.fromJson(Map<String, dynamic> json) => Sanction(
+    id: json['id'] as int,
+    kind: json['kind'] as String,
+    reason: json['reason'] as String,
+    appealStatus: json['appeal_status'] as String,
+    endsAt: json['ends_at'] == null ? null : DateTime.parse(json['ends_at'] as String),
+  );
+
+  final int id;
+  final String kind;
+  final String reason;
+  final String appealStatus;
+  final DateTime? endsAt;
+}
+
+class Lga {
+  const Lga(this.id, this.name);
+
+  final int id;
+  final String name;
+}
+
+/// The person's latest verifier application, and the LGAs they can apply for.
+class VerifierApplicationInfo {
+  const VerifierApplicationInfo({
+    required this.isVerifier,
+    required this.lgas,
+    this.status,
+    this.area,
+  });
+
+  factory VerifierApplicationInfo.fromJson(Map<String, dynamic> json) {
+    final application = json['application'] as Map<String, dynamic>?;
+    return VerifierApplicationInfo(
+      isVerifier: json['is_verifier'] as bool,
+      status: application?['status'] as String?,
+      area: application?['area'] as String?,
+      lgas: [
+        for (final l in json['lgas'] as List)
+          Lga((l as Map<String, dynamic>)['id'] as int, l['name'] as String),
+      ],
+    );
+  }
+
+  final bool isVerifier;
+  final String? status;
+  final String? area;
+  final List<Lga> lgas;
+}

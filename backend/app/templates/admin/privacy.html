@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, empty %}
+{% block title %}Privacy requests{% endblock %}
+{% block heading %}Privacy requests{% endblock %}
+{% block subheading %}<div class="sub">Requests under Nigeria's Data Protection Act. Answer within 30 days.</div>{% endblock %}
+{% block body %}
+{% set kinds = {"export":"Export data","delete":"Delete account","correct":"Correct data"} %}
+<div class="card" style="padding:8px">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th style="padding-left:16px">Request</th><th>From</th><th>Received</th><th>Due</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+{% for r in rows %}{% set days = r.remaining.days if r.remaining else 0 %}<tr>
+<td style="padding-left:16px"><b>{{ kinds[r.kind] }}</b>{% if r.details %}<div class="muted small" style="max-width:320px">{{ r.details }}</div>{% endif %}{% if r.notes %}<div class="faint small">Note: {{ r.notes }}</div>{% endif %}</td>
+<td class="mono small">{{ r.contact }}{% if not r.user_id %}<div class="faint" style="font-family:Inter">No matching account</div>{% endif %}</td>
+<td class="muted">{{ r.received_at|when }}</td>
+<td>{% if r.status in ["done","rejected"] %}<span class="faint">—</span>{% elif days < 0 %}<span class="pill bad">Overdue</span>{% elif days < 7 %}<span class="pill warn">{{ days }} days left</span>{% else %}<span class="pill">{{ days }} days left</span>{% endif %}</td>
+<td><span class="pill {{ 'good' if r.status == 'done' else 'bad' if r.status == 'rejected' else '' }}">{{ r.status|replace("_"," ")|capitalize }}</span>{% if r.handler %}<div class="faint small">{{ r.handler }}</div>{% endif %}</td>
+<td>{% if r.status not in ["done","rejected"] %}<form method="post" action="/admin/privacy/{{ r.id }}/status" class="row" style="gap:6px">{{ csrf_field(admin) }}
+{% if r.kind == "export" and r.user_id %}<a class="btn small" href="/admin/privacy/{{ r.id }}/export">{{ icon("download", 14) }}Export data</a>{% endif %}
+{% if r.kind == "delete" and r.user_id %}<span class="faint small">Delete via Supabase, then mark done</span>{% endif %}
+<input name="notes" placeholder="Note" style="width:140px;height:32px;padding:4px 10px">
+{% if r.status == "new" %}<button class="btn small" name="status" value="in_progress">Start</button>{% endif %}
+<button class="btn small primary" name="status" value="done">Mark done</button><button class="btn small" name="status" value="rejected">Reject</button></form>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% else %}{{ empty("No privacy requests") }}{% endif %}
+</div>
+<div class="card"><h2>{{ icon("plus", 16) }}Log a request received by email, phone or letter</h2>
+<form method="post" action="/admin/privacy" class="form-grid">{{ csrf_field(admin) }}
+<label class="field">Their email or phone<input name="contact" required></label>
+<label class="field">Request<select name="kind"><option value="export">Export data</option><option value="delete">Delete account</option><option value="correct">Correct data</option></select></label>
+<label class="field wide">Details<input name="details" placeholder="What they asked for"></label>
+<div><button class="btn primary">Log request</button></div></form>
+<p class="faint small">Requests from the app (Profile → Correct my data) appear here automatically. People can also export or delete their own data in the app.</p></div>
+{% endblock %}

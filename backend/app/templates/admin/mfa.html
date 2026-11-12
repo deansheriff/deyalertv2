@@ -1,0 +1,20 @@
+{% extends "_auth_base.html" %}
+{% block title %}Two-step sign-in{% endblock %}
+{% block card %}
+<form method="post" action="/admin/mfa">
+{% if enrolment %}
+<h2>Set up two-step sign-in</h2>
+<p class="lead">Scan this with an authenticator app such as Google Authenticator, Authy or 1Password, then enter the six-digit code it shows.</p>
+<img class="qr" src="{{ enrolment.qr_code }}" alt="Authenticator QR code">
+<p class="lead" style="margin:0 0 6px">Can't scan? Enter this key instead:</p>
+<code class="secret">{{ enrolment.secret }}</code>
+{% else %}
+<h2>Enter your code</h2>
+<p class="lead">Use the six-digit code from your authenticator app.</p>
+{% endif %}
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<label for="code">Six-digit code</label>
+<input id="code" class="code-input" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" required autofocus>
+<button class="primary">Verify and continue</button>
+</form>
+{% endblock %}

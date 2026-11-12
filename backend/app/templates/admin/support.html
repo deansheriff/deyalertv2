@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, empty %}
+{% block title %}Support inbox{% endblock %}
+{% block heading %}Support inbox{% endblock %}
+{% block subheading %}<div class="sub">Messages sent from Profile → Contact support in the app.</div>{% endblock %}
+{% block head %}<style>
+.inbox{display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px;align-items:start}
+.thread a{display:block;padding:12px 14px;border-radius:14px;text-decoration:none;border:1px solid transparent}
+.thread a:hover{background:var(--card2)}
+.thread a.on{border-color:var(--line2);background:var(--card2)}
+.msg{max-width:80%;padding:12px 14px;border-radius:16px;background:var(--card2);border:1px solid var(--line);margin-bottom:10px}
+.msg.staff{margin-left:auto;background:rgba(166,239,31,.07);border-color:rgba(166,239,31,.25)}
+.msg.internal{background:rgba(245,166,35,.07);border-color:rgba(245,166,35,.3)}
+@media (max-width:1100px){.inbox{grid-template-columns:1fr}}
+</style>{% endblock %}
+{% block body %}
+{% set cats = {"bug":"Something is broken","question":"Question","abuse":"Report abuse","idea":"Idea"} %}
+<div class="tabs">{% for name, label in [("open","Open"),("waiting","Waiting for user"),("closed","Closed")] %}<a class="{{ 'on' if status == name }}" href="?status={{ name }}">{{ label }} ({{ counts.get(name, 0) }})</a>{% endfor %}</div>
+<div class="inbox">
+<div class="card thread" style="padding:8px">
+{% if tickets %}{% for t in tickets %}<a href="?status={{ status }}&ticket={{ t.id }}" class="{{ 'on' if current and current.id == t.id }}"><div class="row" style="gap:8px">{% if t.unread and status == "open" %}<span class="dot ok"></span>{% endif %}<span class="pill">{{ cats.get(t.category, t.category) }}</span><span class="faint small" style="margin-left:auto">{{ t.updated_at|ago }}</span></div><div class="ellipsis" style="margin-top:6px;font-weight:600">{{ t.first_line }}</div><div class="faint small mono">{{ contact(t.phone, t.email) }}</div></a>{% endfor %}
+{% else %}{{ empty("Inbox zero", "No conversations here.") }}{% endif %}
+</div>
+<div class="card">
+{% if current %}
+<div class="row" style="margin-bottom:14px"><b>{{ current.display_name or "App user" }}</b><span class="mono faint small">{{ contact(current.phone, current.email) }}</span><span class="pill">{{ cats.get(current.category, current.category) }}</span>
+<form method="post" action="/admin/support/{{ current.id }}/status" class="row" style="margin-left:auto;gap:6px">{{ csrf_field(admin) }}{% if current.status != "closed" %}<button class="btn small" name="status" value="closed">Close</button>{% else %}<button class="btn small" name="status" value="open">Reopen</button>{% endif %}</form></div>
+{% if current.app_info %}<p class="faint small mono">{{ current.app_info }}</p>{% endif %}
+<div style="margin:16px 0">{% for m in messages %}<div class="msg {{ 'staff' if m.from_staff }} {{ 'internal' if m.is_internal }}"><div class="faint small" style="margin-bottom:4px">{% if m.is_internal %}Internal note · {% endif %}{{ m.author or "User" if not m.from_staff else (m.author or "Staff") }} · {{ m.created_at|ago }}</div>{{ m.body }}</div>{% endfor %}</div>
+<form method="post" action="/admin/support/{{ current.id }}/reply" class="stack">{{ csrf_field(admin) }}
+<textarea name="body" required placeholder="Write a reply. The person sees it in the app."></textarea>
+<div class="row"><label class="check"><input type="checkbox" name="internal" value="true">Internal note (staff only)</label><label class="check"><input type="checkbox" name="close" value="true">Close after sending</label><button class="btn primary" style="margin-left:auto">Send reply</button></div>
+</form>
+{% else %}{{ empty("Choose a conversation") }}{% endif %}
+</div>
+</div>
+{% endblock %}

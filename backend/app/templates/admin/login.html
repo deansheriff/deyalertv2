@@ -1,15 +1,23 @@
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dey Alert Admin</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0A0C0A;color:#F2F5F3;font:15px/1.5 Inter,system-ui,sans-serif}
-form{width:360px;background:#141714;border:1px solid #3A413A;border-radius:20px;padding:24px}
-h1{margin:0 0 4px;font-size:24px}p{color:#B4BCB4;margin:0 0 16px}
-label{display:block;margin:12px 0 4px;color:#B4BCB4}
-input{width:100%;padding:12px;border-radius:12px;border:1px solid #3A413A;background:#0A0C0A;color:#F2F5F3;box-sizing:border-box}
-button{width:100%;margin-top:18px;min-height:48px;border:0;border-radius:999px;background:#A6EF1F;color:#0A0C0A;font-weight:700;font-size:15px;cursor:pointer}
-.err{color:#FF3B30}.ok{color:#A6EF1F}</style></head>
-<body><form method="post"><h1>Dey Alert</h1><p>Moderators and admins only.</p>
-{% if notice %}<p class="ok">{{ notice }}</p>{% endif %}
-{% if error %}<p class="err">{{ error }}</p>{% endif %}
-<label for="email">Email</label><input id="email" name="email" type="email" required autofocus>
-<label for="password">Password</label><input id="password" name="password" type="password" required>
-<button>Continue</button></form></body></html>
+{% extends "_auth_base.html" %}
+{% block stats %}
+<div class="stats">
+<div class="stat"><b>{{ stats.live if stats else 0 }}</b><span>Live incidents</span></div>
+<div class="stat"><b>{{ stats.verified if stats else 0 }}</b><span>Verified today</span></div>
+<div class="stat"><b>{{ stats.wards if stats else 0 }}</b><span>Wards active this month</span></div>
+</div>
+{% endblock %}
+{% block card %}
+<form method="post" action="/admin/login">
+<h2>Sign in to the admin panel</h2>
+<p class="lead">Staff accounts only. Every action is recorded.</p>
+{% if notice %}<div class="ok">{{ notice }}</div>{% endif %}
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<label for="email">Email</label>
+<input id="email" name="email" type="email" autocomplete="username" required autofocus>
+<label for="password">Password</label>
+<div class="field"><input id="password" name="password" type="password" autocomplete="current-password" required><button type="button" class="toggle" data-reveal="password">Show</button></div>
+<button class="primary">Sign in</button>
+<p class="help">Forgot your password? Ask a super admin to reset it.</p>
+<div class="foot"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Protected by rate limiting and audit logging</div>
+</form>
+{% endblock %}

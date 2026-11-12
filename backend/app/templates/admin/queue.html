@@ -1,11 +1,59 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, severity, csrf_field, empty %}
+{% block title %}Moderation queue{% endblock %}
+{% block heading %}Moderation queue{% endblock %}
+{% block subheading %}<div class="sub">Held reports and photos waiting for review.</div>{% endblock %}
+{% block head %}<style>
+.bulkbar{display:none;position:sticky;top:76px;z-index:3;align-items:center;gap:10px;padding:10px 14px;border-radius:999px;background:var(--lime);color:var(--ink);margin-bottom:12px;font-weight:600}
+.bulkbar.show{display:flex}
+.bulkbar .btn{border-color:rgba(10,12,10,.3);color:var(--ink);height:32px}
+.bulkbar .btn:hover{background:rgba(10,12,10,.08)}
+.blur{filter:blur(4px)}
+</style>{% endblock %}
 {% block body %}
-<h1>Moderation queue</h1>
-<p class="muted">Reports hidden after flagging or the automatic text check, waiting for a moderator's decision.</p>
-<div class="card"><table>
-<tr><th>Type</th><th>Severity</th><th>Area</th><th>Reporter band</th><th>Flag weight</th><th>Received</th><th></th></tr>
-{% for item in items %}
-<tr><td>{{ item.label }}</td><td>{{ item.severity|capitalize }}</td><td>{{ item.ward or item.lga or item.location_name or "Unknown" }}</td><td><span class="chip">{{ item.band }}</span></td><td>{{ item.flag_weight }}</td><td>{{ item.created_at.strftime("%d %b %H:%M") }}</td><td><a class="btn" href="/admin/incidents/{{ item.id }}">Review</a></td></tr>
-{% else %}<tr><td colspan="7" class="muted">Nothing is waiting for review.</td></tr>{% endfor %}
-</table></div>
+<form class="card row" method="get" style="padding:14px">
+<select name="lga"><option value="">All LGAs</option>{% for item in lgas %}<option value="{{ item.id }}" {{ "selected" if filters.lga == item.id|string }}>{{ item.name }}</option>{% endfor %}</select>
+<select name="type"><option value="">All types</option>{% for item in types %}<option value="{{ item.code }}" {{ "selected" if filters.type == item.code }}>{{ item.label }}</option>{% endfor %}</select>
+<select name="severity"><option value="">Any severity</option>{% for level in severities %}<option value="{{ level }}" {{ "selected" if filters.severity == level }}>{{ level|capitalize }}</option>{% endfor %}</select>
+<select name="flags"><option value="">Any flags</option><option value="2" {{ "selected" if filters.flags == "2" }}>Flag weight 2 or more</option><option value="5" {{ "selected" if filters.flags == "5" }}>Flag weight 5 or more</option></select>
+<select name="sort"><option value="wait">Longest waiting</option><option value="severity" {{ "selected" if filters.sort == "severity" }}>Most severe</option><option value="flags" {{ "selected" if filters.sort == "flags" }}>Most flagged</option></select>
+<button class="btn primary">Apply</button>
+</form>
+<div class="split">
+<div>
+<form method="post" action="/admin/queue/bulk" id="bulk">{{ csrf_field(admin) }}
+{% if admin.can("bulk_actions") and admin.can("act_on_incidents") %}<div class="bulkbar" id="bulkbar"><span id="selected">0 selected</span><span style="margin-left:auto"></span>
+<button class="btn" name="action" value="resolve">Resolve</button><button class="btn" name="action" value="mark_false" onclick="return confirm('Mark the selected reports as false?')">Mark false</button><button class="btn" name="action" value="restore">Restore</button><button class="btn" type="button" onclick="clearSelection()">Clear</button></div>{% endif %}
+<div class="card" style="padding:8px">
+{% if items %}<div class="table-wrap"><table><thead><tr>{% if admin.can("bulk_actions") %}<th style="width:36px;padding-left:16px"><input type="checkbox" class="check" id="all" aria-label="Select all"></th>{% endif %}<th>Severity</th><th>Report</th><th>Area</th><th>Flags</th><th>Waiting</th><th>Claimed</th></tr></thead><tbody>
+{% for item in items %}<tr>
+{% if admin.can("bulk_actions") %}<td style="padding-left:16px"><input type="checkbox" name="incident_ids" value="{{ item.id }}" class="row-check" style="width:17px;height:17px;accent-color:var(--lime)"></td>{% endif %}
+<td>{{ severity(item.severity) }}</td>
+<td style="max-width:360px"><a class="link" href="/admin/incidents/{{ item.id }}">{{ item.label }}</a>{% if item.merged %} <span class="pill small">+{{ item.merged }} merged</span>{% endif %}<div class="muted small ellipsis">{{ item.description or item.location_name or "No description" }}</div>{% if item.hold_reason %}<div class="faint small">Held: {{ "word filter" if item.hold_reason.startswith("word filter") else item.hold_reason }}</div>{% endif %}</td>
+<td class="muted">{{ item.ward or item.lga or "—" }}</td>
+<td>{{ item.flag_weight|float|round(1) }}<div class="faint small">Reporter: {{ item.band }}</div></td>
+<td class="wait-{{ item.created_at|wait_level }}">{{ item.created_at|waited }}</td>
+<td>{% if item.claimed_name %}<span class="row" style="gap:6px;flex-wrap:nowrap"><span class="avatar" style="width:26px;height:26px;font-size:12px">{{ item.claimed_name[:1]|upper }}</span><span class="small">{{ item.claimed_name }}</span></span>{% else %}<button class="btn small primary" formaction="/admin/incidents/{{ item.id }}/claim" formmethod="post">Claim</button>{% endif %}</td>
+</tr>{% endfor %}</tbody></table></div>
+{% else %}{{ empty("Queue is clear", "Nothing matches these filters.") }}{% endif %}
+</div></form>
+</div>
+<div class="sticky">
+<div class="card"><h2>{{ icon("shield", 16) }}Held by word filter</h2>
+{% if word_holds %}<div class="list">{% for item in word_holds %}<a href="/admin/incidents/{{ item.id }}"><div class="grow"><div style="font-weight:600">{{ item.label }}</div><div class="small faint">Matched <span class="blur">{{ item.hold_reason[13:] }}</span></div></div><span class="small">{{ item.created_at|waited }}</span></a>{% endfor %}</div>
+{% else %}<p class="muted small">No reports are held by the word filter.</p>{% endif %}
+{% if admin.can("manage_incident_types") %}<a class="link small" href="/admin/settings#word-filter">Edit word filter</a>{% endif %}</div>
+{% if admin.can("moderate_media") %}<div class="card"><h2>{{ icon("eye", 16) }}Photos waiting<span class="right pill">{{ photos|length }}</span></h2>
+{% if photos %}<div class="list">{% for photo in photos %}<div><div class="grow"><a class="link" href="/admin/incidents/{{ photo.incident_id }}">{{ photo.label }}</a><div class="faint small">{{ photo.created_at|ago }}</div></div>
+<form method="post" action="/admin/media/{{ photo.id }}" class="row" style="gap:6px">{{ csrf_field(admin) }}<button class="btn small" name="decision" value="approved">Approve</button><button class="btn small danger" name="decision" value="rejected">Reject</button></form></div>{% endfor %}</div>
+{% else %}<p class="muted small">No photos waiting.</p>{% endif %}</div>{% endif %}
+</div>
+</div>
 {% endblock %}
+{% block scripts %}<script>
+const checks = [...document.querySelectorAll(".row-check")], bar = document.getElementById("bulkbar"), all = document.getElementById("all");
+function sync(){ const n = checks.filter(c => c.checked).length; if (bar) { bar.classList.toggle("show", n > 0); document.getElementById("selected").textContent = `${n} selected`; } }
+function clearSelection(){ checks.forEach(c => c.checked = false); if (all) all.checked = false; sync(); }
+checks.forEach(c => c.addEventListener("change", sync));
+if (all) all.addEventListener("change", () => { checks.forEach(c => c.checked = all.checked); sync(); });
+</script>{% endblock %}

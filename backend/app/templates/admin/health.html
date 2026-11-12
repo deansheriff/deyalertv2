@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, flash %}
+{% block title %}System health{% endblock %}
+{% block heading %}System health{% endblock %}
+{% block subheading %}<div class="sub">Checked just now · <a class="link" href="/admin/health">Refresh</a></div>{% endblock %}
+{% block actions %}<span class="pill {{ 'good' if overall == 'ok' else 'warn' if overall == 'warn' else 'bad' }}"><span class="dot {{ overall }}"></span>{{ {"ok":"All systems normal","warn":"Some services need attention","down":"A service is down"}[overall] }}</span>{% endblock %}
+{% block body %}
+{{ flash(notice) }}
+<div class="grid g4" style="margin-bottom:16px">
+{% for check in checks %}<div class="kpi"><div class="label"><span class="dot {{ check.status }}"></span>{{ check.name }}</div><div style="margin-top:8px;font-weight:600">{{ {"ok":"Working","warn":"Needs attention","down":"Down"}[check.status] }}{% if check.latency_ms is not none %} <span class="faint small">· {{ check.latency_ms }} ms</span>{% endif %}</div><div class="faint small">{{ check.detail }}</div></div>{% endfor %}
+</div>
+<div class="grid g2">
+<div class="card"><h2>{{ icon("clock", 16) }}Scheduled jobs</h2>
+<table><thead><tr><th>Job</th><th>Last finished</th></tr></thead><tbody>{% for job in cron %}<tr><td>{{ job.label }}</td><td class="muted">{{ job.last|ago if job.last else "Not yet" }}</td></tr>{% endfor %}</tbody></table>
+<p class="faint small">Expiry runs every minute, check-ins every minute, alert points every 15 minutes, retention nightly at 03:30 and the weekly report on Mondays at 07:00.</p></div>
+<div class="card"><h2>{{ icon("alert", 16) }}Kill switches</h2>
+{% if admin.can("manage_settings") %}<form method="post" action="/admin/health/switches" class="stack">{{ csrf_field(admin) }}
+<label class="row"><span class="switch"><input type="checkbox" name="signups_paused" value="true" {{ "checked" if switches.signups_paused }}><span></span></span><span class="grow"><b>Pause new sign-ups</b><div class="faint small">Existing accounts keep working.</div></span></label>
+<label class="row"><span class="switch"><input type="checkbox" name="reports_paused" value="true" {{ "checked" if switches.reports_paused }}><span></span></span><span class="grow"><b>Pause new reports</b><div class="faint small">Everywhere, or only in the LGAs chosen below.</div></span></label>
+<select name="reports_paused_lgas" multiple style="min-height:90px;width:100%">{% for l in lgas %}<option value="{{ l.id }}" {{ "selected" if l.id in switches.reports_paused_lgas }}>{{ l.name }}</option>{% endfor %}</select>
+<label class="row"><span class="switch"><input type="checkbox" name="maintenance" value="true" {{ "checked" if switches.maintenance }}><span></span></span><span class="grow"><b>Maintenance mode</b><div class="faint small">The app shows this message and can't load data. The panel stays up.</div></span></label>
+<input name="maintenance_message" value="{{ switches.maintenance_message }}" maxlength="200" style="width:100%">
+<button class="btn primary">Save switches</button></form>
+{% else %}<div class="list"><div><span class="grow">New sign-ups</span>{{ "Paused" if switches.signups_paused else "Open" }}</div><div><span class="grow">New reports</span>{{ "Paused" if switches.reports_paused else "Open" }}</div><div><span class="grow">Maintenance</span>{{ "On" if switches.maintenance else "Off" }}</div></div>{% endif %}
+</div>
+</div>
+<div class="card"><h2>{{ icon("settings", 16) }}Limits</h2>
+{% if admin.can("manage_settings") %}<form method="post" action="/admin/health/limits">{{ csrf_field(admin) }}<div class="form-grid">
+{% for key, (label, low, high) in bounds.items() %}<label class="field">{{ label }}<input name="{{ key }}" type="number" min="{{ low }}" max="{{ high }}" step="{{ '0.5' if key == 'flag_hide_threshold' else '1' }}" value="{{ limits[key] }}"></label>{% endfor %}
+</div><button class="btn primary" style="margin-top:14px">Save limits</button></form>
+<p class="faint small">These override the server's defaults straight away, without a redeploy.</p>
+{% else %}<div class="form-grid">{% for key, (label, low, high) in bounds.items() %}<div><div class="faint small">{{ label }}</div><b>{{ limits[key] }}</b></div>{% endfor %}</div>{% endif %}
+</div>
+{% endblock %}

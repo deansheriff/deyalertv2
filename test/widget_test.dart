@@ -5,6 +5,7 @@ import 'package:dey_alert/core/theme/app_theme.dart';
 import 'package:dey_alert/core/theme/tokens.dart';
 import 'package:dey_alert/core/ui.dart';
 import 'package:dey_alert/features/auth/auth_screens.dart';
+import 'package:dey_alert/features/community/community_screens.dart';
 import 'package:dey_alert/features/map/map_tab.dart';
 import 'package:dey_alert/features/sos/sos_screens.dart';
 import 'package:dey_alert/main.dart';
@@ -226,6 +227,84 @@ void main() {
     expect(find.text('Phone number').hitTestable(), findsOneWidget);
   });
 
+  group('community features', () {
+    test('reads watch zones, tickets, sanctions and applications from the server', () {
+      final zone = WatchZone.fromJson({
+        'id': 3,
+        'name': 'Home',
+        'kind': 'home',
+        'lat': 6.5,
+        'lng': 3.4,
+        'radius_m': 1500,
+        'is_active': true,
+      });
+      expect(zone.toJson(active: false)['is_active'], isFalse);
+      expect(zone.toJson()['radius_m'], 1500);
+
+      final ticket = SupportTicket.fromJson({
+        'id': 1,
+        'category': 'bug',
+        'status': 'waiting',
+        'messages': [
+          {'from_staff': false, 'body': 'Map is blank', 'created_at': '2026-11-10T10:00:00Z'},
+          {'from_staff': true, 'body': 'Fixed', 'created_at': '2026-11-10T11:00:00Z'},
+        ],
+      });
+      expect(ticket.messages.last.fromStaff, isTrue);
+
+      final sanction = Sanction.fromJson({
+        'id': 9,
+        'kind': 'pause_reporting',
+        'reason': 'False reports',
+        'ends_at': null,
+        'appeal_status': 'none',
+      });
+      expect(sanction.endsAt, isNull);
+
+      final info = VerifierApplicationInfo.fromJson({
+        'application': {'status': 'pending', 'area': 'Ward 4, Ikeja'},
+        'is_verifier': false,
+        'lgas': [
+          {'id': 1, 'name': 'Ikeja'},
+        ],
+      });
+      expect(info.status, 'pending');
+      expect(info.lgas.single.name, 'Ikeja');
+    });
+
+    Future<void> showZones(WidgetTester tester, List<WatchZone> zones) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [zonesProvider.overrideWith((ref) async => zones)],
+          child: MaterialApp(theme: AppTheme.dark, home: const WatchZonesScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    WatchZone zone(int id) => WatchZone(
+      id: id,
+      name: 'Zone $id',
+      kind: 'other',
+      lat: 6.5,
+      lng: 3.4,
+      radiusM: 2000,
+      isActive: true,
+    );
+
+    testWidgets('an empty list invites a first zone', (tester) async {
+      await showZones(tester, const []);
+      expect(find.textContaining('No zones yet'), findsOneWidget);
+      expect(tester.widget<PillButton>(find.byType(PillButton)).onPressed, isNotNull);
+    });
+
+    testWidgets('the add button stops at five zones', (tester) async {
+      await showZones(tester, [for (var i = 1; i <= 5; i++) zone(i)]);
+      expect(find.text('Zone 1'), findsOneWidget);
+      expect(tester.widget<PillButton>(find.byType(PillButton)).onPressed, isNull);
+    });
+  });
+
   group('email sign-in', () {
     test('accepts and tidies real addresses', () {
       expect(normalizeEmail('  Ada@Example.com '), 'ada@example.com');
@@ -285,14 +364,19 @@ void main() {
   });
 
   group('navigation gates', () {
-    String? gate(String location, {bool language = true, bool onboarded = true, bool signedIn = true, bool profile = true}) =>
-        gateRedirect(
-          location: location,
-          languageChosen: language,
-          onboarded: onboarded,
-          signedIn: signedIn,
-          profileDone: profile,
-        );
+    String? gate(
+      String location, {
+      bool language = true,
+      bool onboarded = true,
+      bool signedIn = true,
+      bool profile = true,
+    }) => gateRedirect(
+      location: location,
+      languageChosen: language,
+      onboarded: onboarded,
+      signedIn: signedIn,
+      profileDone: profile,
+    );
 
     test('walks through setup in order', () {
       expect(gate('/map', language: false), '/language');

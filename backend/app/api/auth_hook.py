@@ -81,6 +81,7 @@ async def sms_hook(
     if not await app_settings.phone_sign_in_enabled(session):
         return _hook_error(403, "Phone sign-in is turned off. Use email.")
 
+    settings = await app_settings.effective(session, settings)
     payload = await request.json()
     phone = payload["user"]["phone"]
     otp = payload["sms"]["otp"]
@@ -92,7 +93,8 @@ async def sms_hook(
     ):
         return _hook_error(429, "Too many codes requested")
     try:
-        await sms.send(phone, f"Your Dey Alert code is {otp}. It expires soon. Do not share it.")
+        wording = (await app_settings.message_templates(session))["otp_sms"]
+        await sms.send(phone, app_settings.fill(wording, code=otp))
     except httpx.HTTPError:
         return _hook_error(502, "SMS could not be sent")
     return {}
@@ -122,6 +124,7 @@ async def email_hook(
     if not messages:
         return _hook_error(400, "Nothing to send")
 
+    settings = await app_settings.effective(session, settings)
     config = await mailer.load(session)
     if config is None:
         return _hook_error(503, "Email is not set up yet. An admin must add SMTP settings.")

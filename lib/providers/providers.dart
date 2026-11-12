@@ -108,3 +108,37 @@ final pendingCountProvider = FutureProvider.autoDispose<int>(
 
 Stream<AuthState> authStream() =>
     Supabase.instance.client.auth.onAuthStateChange;
+
+final zonesProvider = FutureProvider.autoDispose<List<WatchZone>>(
+  (ref) => ref.read(repositoryProvider).zones(),
+);
+
+final announcementsProvider = FutureProvider.autoDispose<List<Announcement>>((ref) async {
+  final repository = ref.read(repositoryProvider);
+  final at = await ref.watch(centerProvider.future).catchError((_) => const LatLngPoint(0, 0));
+  try {
+    return await repository.announcements(at.lat == 0 && at.lng == 0 ? null : at);
+  } on ApiException {
+    return const [];
+  }
+});
+
+final incidentUpdatesProvider = FutureProvider.autoDispose.family<List<IncidentUpdate>, String>(
+  (ref, id) => ref.read(repositoryProvider).incidentUpdates(id),
+);
+
+final ticketsProvider = FutureProvider.autoDispose<List<SupportTicket>>(
+  (ref) => ref.read(repositoryProvider).tickets(),
+);
+
+final verifierApplicationProvider = FutureProvider.autoDispose<VerifierApplicationInfo>(
+  (ref) => ref.read(repositoryProvider).verifierApplication(),
+);
+
+final sanctionsProvider = FutureProvider.autoDispose<List<Sanction>>((ref) async {
+  try {
+    return await ref.read(repositoryProvider).sanctions();
+  } on ApiException {
+    return const [];
+  }
+});

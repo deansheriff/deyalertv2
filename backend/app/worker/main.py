@@ -1,20 +1,37 @@
+import time
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from functools import wraps
 from typing import Any
 from uuid import UUID
 
 import httpx
 import sentry_sdk
-from arq import cron
+from arq import Retry, cron
 from arq.connections import RedisSettings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.services import app_settings, broadcasts, health, insights, mailer, notifications, sos
 from app.services import media as media_service
-from app.services import notifications, sos
+from app.services import webhooks as webhook_service
 from app.services.messaging import broadcast, build_push, build_sms
 
 configure_logging()
+
+
+def recorded(job: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+    """Notes when a scheduled job last finished, for the System health page."""
+
+    @wraps(job)
+    async def run(ctx: dict[str, Any]) -> Any:
+        result = await job(ctx)
+        await ctx["redis"].set(health.CRON_KEY.format(job.__name__), str(time.time()))
+        return result
+
+    return run
 
 
 async def startup(ctx: dict[str, Any]) -> None:
@@ -51,6 +68,10 @@ async def fan_out_alert(ctx: dict[str, Any], incident_id: str, trigger: str) -> 
                 {"id": UUID(incident_id)},
             )
         ).first()
+    if area is not None and trigger in ("confirmed", "resolved"):
+        await queue_webhooks(
+            ctx, f"incident.{trigger}", {"incident_id": incident_id}, area.lga_id, area.ward_id
+        )
     if area is not None:
         await broadcast(
             ctx["settings"],
@@ -59,6 +80,65 @@ async def fan_out_alert(ctx: dict[str, Any], incident_id: str, trigger: str) -> 
             {"incident_id": incident_id, "trigger": trigger},
         )
     return count
+
+
+async def queue_webhooks(
+    ctx: dict[str, Any],
+    event: str,
+    payload: dict[str, Any],
+    lga_id: int | None = None,
+    ward_id: int | None = None,
+) -> None:
+    async with ctx["sessions"]() as session:
+        ids = await webhook_service.queue_event(session, event, payload, lga_id, ward_id)
+    for delivery_id in ids:
+        await ctx["redis"].enqueue_job("deliver_webhook", delivery_id)
+
+
+async def deliver_webhook(ctx: dict[str, Any], delivery_id: int) -> None:
+    async with ctx["sessions"]() as session:
+        done = await webhook_service.deliver(session, ctx["http"], delivery_id)
+    if not done:
+        # Back off 1, 4, 9, 16 minutes between attempts.
+        tries = ctx.get("job_try", 1)
+        raise Retry(defer=60 * tries * tries)
+
+
+async def send_broadcast(ctx: dict[str, Any], broadcast_id: str) -> dict[str, int]:
+    async with ctx["sessions"]() as session:
+        stats = await broadcasts.send(
+            session, ctx["push"], ctx["sms"], ctx["redis"], UUID(broadcast_id)
+        )
+        title = await session.scalar(
+            text("SELECT title FROM broadcasts WHERE id = :id"), {"id": UUID(broadcast_id)}
+        )
+    if stats:
+        await queue_webhooks(
+            ctx, "broadcast.sent", {"broadcast_id": broadcast_id, "title": title, **stats}
+        )
+    return stats
+
+
+async def weekly_report(ctx: dict[str, Any]) -> int:
+    """Monday morning summary to everyone listed in Analytics > Weekly report."""
+    async with ctx["sessions"]() as session:
+        config = await app_settings.get(session, app_settings.WEEKLY_REPORT, {}) or {}
+        recipients = [r for r in config.get("recipients", []) if "@" in r]
+        smtp = await mailer.load(session)
+        if not config.get("enabled") or not recipients or smtp is None:
+            return 0
+        scope = {"scope_all": True, "scope_lgas": [], "scope_wards": []}
+        data = await insights.overview(session, 7, scope)
+    body = f"{insights.weekly_text(data)}\n\n{insights.csv_report(data)}"
+    subject = f"Dey Alert weekly report, {datetime.now(UTC):%d %b %Y}"
+    sent = 0
+    for address in recipients:
+        try:
+            await mailer.send(smtp, address, subject, body)
+            sent += 1
+        except mailer.MailError:
+            continue
+    return sent
 
 
 async def expire_incidents(ctx: dict[str, Any]) -> int:
@@ -79,9 +159,7 @@ async def process_media(ctx: dict[str, Any], media_id: str) -> None:
         await media_service.process(session, ctx["settings"], ctx["http"], UUID(media_id))
 
 
-async def send_contact_invite(
-    ctx: dict[str, Any], phone: str, owner_name: str, token: str
-) -> None:
+async def send_contact_invite(ctx: dict[str, Any], phone: str, owner_name: str, token: str) -> None:
     link = f"{ctx['settings'].public_base_url}/c/{token}"
     message = f"{owner_name} wants to add you as a trusted contact on Dey Alert. Reply here: {link}"
     await ctx["sms"].send(phone, message)
@@ -95,8 +173,9 @@ async def send_sos_alerts(ctx: dict[str, Any], sos_id: str, token: str) -> int:
             status = "failed"
             message_id = None
             try:
+                wording = (await app_settings.message_templates(session))["sos_sms"]
                 message_id = await ctx["sms"].send(
-                    contact.phone, f"SOS: {name} needs help. See their location: {link}"
+                    contact.phone, app_settings.fill(wording, name=name, link=link)
                 )
                 status = "sent"
             finally:
@@ -119,8 +198,9 @@ async def send_sos_alerts(ctx: dict[str, Any], sos_id: str, token: str) -> int:
 async def send_sos_safe(ctx: dict[str, Any], sos_id: str) -> None:
     async with ctx["sessions"]() as session:
         name, contacts = await sos.contacts_for(session, UUID(sos_id))
+        wording = (await app_settings.message_templates(session))["sos_safe_sms"]
     for contact in contacts:
-        await ctx["sms"].send(contact.phone, f"Dey Alert: {name} has marked themselves safe.")
+        await ctx["sms"].send(contact.phone, app_settings.fill(wording, name=name))
 
 
 async def fire_overdue_checkins(ctx: dict[str, Any]) -> int:
@@ -155,13 +235,23 @@ class WorkerSettings:
         send_contact_invite,
         send_sos_alerts,
         send_sos_safe,
+        send_broadcast,
+        deliver_webhook,
     ]
     cron_jobs = [
-        cron(expire_incidents, second=0),
-        cron(fire_overdue_checkins, second=30),
-        cron(refresh_stale_alert_points, minute=set(range(0, 60, 15)), second=10),
-        cron(purge_retention, hour=2, minute=30),
+        cron(recorded(expire_incidents), name="expire_incidents", second=0),
+        cron(recorded(fire_overdue_checkins), name="fire_overdue_checkins", second=30),
+        cron(
+            recorded(refresh_stale_alert_points),
+            name="refresh_stale_alert_points",
+            minute=set(range(0, 60, 15)),
+            second=10,
+        ),
+        cron(recorded(purge_retention), name="purge_retention", hour=2, minute=30),
+        # 07:00 in Lagos.
+        cron(recorded(weekly_report), name="weekly_report", weekday="mon", hour=6, minute=0),
     ]
+    max_tries = 5
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

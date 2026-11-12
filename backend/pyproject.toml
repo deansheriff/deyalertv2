@@ -53,4 +53,4 @@ select = ["E", "F", "I", "UP", "B"]
 "tests/*" = ["E501", "F811"]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends"]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form", "fastapi.File", "app.admin.auth.can", "app.admin.auth.act"]

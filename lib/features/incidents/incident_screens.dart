@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../community/community_screens.dart';
 import '../../core/i18n.dart';
 import '../../core/services/repository.dart';
 import '../../core/theme/tokens.dart';
@@ -42,6 +43,7 @@ class IncidentDetailScreen extends ConsumerWidget {
     ref
       ..invalidate(_incidentProvider(id))
       ..invalidate(_timelineProvider(id))
+      ..invalidate(incidentUpdatesProvider(id))
       ..invalidate(feedProvider);
   }
 
@@ -211,6 +213,7 @@ class _Detail extends ConsumerWidget {
             onPressed: () => _sheet(context, VerifierSheet(incident, onChanged)),
           ),
         ],
+        IncidentUpdates(incident.id, canPost: canVerify),
         const SizedBox(height: 20),
         const Meta('TIMELINE'),
         const SizedBox(height: 8),

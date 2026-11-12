@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_screens.dart';
+import '../features/community/community_screens.dart';
 import '../features/feed/feed_tab.dart';
 import '../features/incidents/incident_screens.dart';
 import '../features/map/map_tab.dart';
@@ -139,6 +140,10 @@ GoRouter buildRouter(AppState state, Repository repository) => GoRouter(
     GoRoute(path: '/settings/quiet', builder: (_, _) => const QuietHoursScreen()),
     GoRoute(path: '/settings/account', builder: (_, _) => const AccountDataScreen()),
     GoRoute(path: '/legal', builder: (_, _) => const LegalScreen()),
+    GoRoute(path: '/zones', builder: (_, _) => const WatchZonesScreen()),
+    GoRoute(path: '/support', builder: (_, _) => const SupportScreen()),
+    GoRoute(path: '/verifier/apply', builder: (_, _) => const VerifierApplicationScreen()),
+    GoRoute(path: '/settings/correction', builder: (_, _) => const CorrectionScreen()),
   ],
 );
 

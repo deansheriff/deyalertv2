@@ -57,7 +57,7 @@ async def test_deploy_creates_a_missing_admin(supabase, account, db, migrated): 
     method, path, body = supabase["calls"][0]
     assert (method, path) == ("POST", "/auth/v1/admin/users")
     assert b'"must_change_password":true' in body.replace(b" ", b"")
-    assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", account) == "admin"
+    assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", account) == "super_admin"
 
 
 async def test_deploy_leaves_an_existing_admin_alone(supabase, account, db, migrated):  # noqa: F811
@@ -70,11 +70,13 @@ async def test_deploy_leaves_an_existing_admin_alone(supabase, account, db, migr
     assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", account) == "moderator"
 
 
-async def test_deploy_adds_a_missing_profile_to_a_hand_made_account(supabase, account, db, migrated):  # noqa: F811,E501
+async def test_deploy_adds_a_missing_profile_to_a_hand_made_account(
+    supabase, account, db, migrated
+):  # noqa: F811,E501
     await db.execute("UPDATE auth.users SET email = $1 WHERE id = $2", EMAIL, account)
     await seed_admin.from_env()
     assert supabase["calls"] == []
-    assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", account) == "admin"
+    assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", account) == "super_admin"
 
 
 @pytest.mark.parametrize(

@@ -17,6 +17,22 @@ SERVER_ONLY_TABLES = [
     "notification_log",
     "audit_log",
     "app_settings",
+    "partners",
+    "staff_scopes",
+    "staff_logins",
+    "incident_notes",
+    "incident_updates",
+    "user_sanctions",
+    "reputation_changes",
+    "broadcasts",
+    "announcements",
+    "webhooks",
+    "webhook_deliveries",
+    "verifier_applications",
+    "support_tickets",
+    "support_messages",
+    "privacy_requests",
+    "watch_zones",
 ]
 
 CLIENT_READ_OBJECTS = [

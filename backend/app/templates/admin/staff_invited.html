@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Invite sent{% endblock %}
+{% block heading %}Staff invited{% endblock %}
+{% block body %}
+<div class="card" style="max-width:620px">
+<h2>{{ icon("check", 16) }}{{ email }} is now {{ role_labels[role] }}</h2>
+{% if invite.emailed %}
+<p class="muted">We emailed them a one-time password and a link to sign in. They'll choose their own password when they first sign in.</p>
+{% else %}
+<div class="note warn" style="margin-bottom:14px">{{ icon("alert", 16) }}<span>Email isn't set up, so the invite wasn't sent. Share this one-time password with them privately. It isn't shown again.</span></div>
+<label class="field">One-time password<input class="mono" readonly value="{{ invite.password }}" onclick="this.select()"></label>
+<p class="muted small" style="margin-top:10px">They sign in at <span class="mono">/admin/login</span> and must choose their own password straight away.</p>
+{% endif %}
+{% if not invite.created %}<p class="faint small">They already had a Dey Alert account, so it was given staff access.</p>{% endif %}
+<a class="btn" href="/admin/staff">Back to staff</a>
+</div>
+{% endblock %}

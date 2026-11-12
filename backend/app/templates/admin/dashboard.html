@@ -1,16 +1,32 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, severity, empty, bars %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block subheading %}<div class="sub">{% if admin.scope.all %}All areas{% else %}Your areas only{% endif %} · updated {{ "now" }}</div>{% endblock %}
+{% block actions %}{% if admin.can("write_broadcasts") %}<a class="btn primary" href="/admin/broadcasts">{{ icon("broadcast", 16) }}New broadcast</a>{% endif %}{% endblock %}
 {% block body %}
-<h1>Dashboard</h1>
-<div class="stats">
-<div class="card stat"><b>{{ stats.today }}</b><span class="muted">Incidents today</span></div>
-<div class="card stat"><b>{{ stats.active }}</b><span class="muted">Active</span></div>
-<div class="card stat"><b>{{ stats.confirmed }}</b><span class="muted">Confirmed today</span></div>
-<div class="card stat"><b>{{ stats.queue }}</b><span class="muted">In queue</span></div>
+{% set top = (per_day | map(attribute="total") | max) if per_day else 0 %}
+<div class="grid g4" style="margin-bottom:16px">
+<div class="kpi"><div class="label">{{ icon("incident", 16) }}Live incidents</div><b>{{ stats.live }}</b><span class="hint">{{ stats.today }} reported today</span></div>
+<div class="kpi"><div class="label">{{ icon("queue", 16) }}Awaiting review</div><b>{{ stats.queue }}</b><span class="hint {{ 'wait-' ~ (stats.oldest|wait_level) if stats.oldest }}">{% if stats.oldest %}Oldest waiting {{ stats.oldest|waited }}{% else %}Nothing waiting{% endif %}</span></div>
+<div class="kpi"><div class="label">{{ icon("verifier", 16) }}Confirmed today</div><b>{{ stats.confirmed }}</b><span class="hint">By verifiers and staff</span></div>
+<div class="kpi"><div class="label">{{ icon("siren", 16) }}SOS active</div><b>{{ sos_active }}</b><span class="hint">Trusted contacts notified</span></div>
 </div>
-<div class="grid2">
-<div class="card"><h2>Incidents by type, last 30 days</h2>
-<table>{% for row in by_type %}<tr><td>{{ row.label }}</td><td style="text-align:right">{{ row.total }}</td></tr>{% else %}<tr><td class="muted">No incidents yet.</td></tr>{% endfor %}</table></div>
-<div class="card"><h2>Top LGAs, last 30 days</h2>
-<table>{% for row in top_lgas %}<tr><td>{{ row.name }}</td><td style="text-align:right">{{ row.total }}</td></tr>{% else %}<tr><td class="muted">No data yet.</td></tr>{% endfor %}</table></div>
+<div class="split-wide">
+<div>
+<div class="card"><h2>{{ icon("chart", 16) }}Reports, last 14 days<span class="right muted small">{{ per_day | sum(attribute="total") }} total</span></h2>
+<div style="display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:8px">
+{% for day in per_day %}<div title="{{ day.day.strftime('%d %b') }}: {{ day.total }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end"><div style="width:100%;border-radius:8px 8px 3px 3px;background:{{ 'var(--lime)' if loop.last else 'linear-gradient(180deg,#5c8a12,#2c3d12)' }};height:{{ (day.total * 100 / top) if top else 0 }}%;min-height:3px"></div><span class="faint" style="font-size:10.5px">{{ day.day.strftime('%d') }}</span></div>{% endfor %}
+</div></div>
+<div class="card"><h2>{{ icon("incident", 16) }}Incidents by type, 7 days</h2>
+{% if by_type %}{{ bars(by_type, "label", "total") }}{% else %}{{ empty("No reports this week") }}{% endif %}</div>
+</div>
+<div>
+<div class="card"><h2>{{ icon("alert", 16) }}Needs attention{% if admin.can("view_queue") %}<a class="right link small" href="/admin/queue">Open queue</a>{% endif %}</h2>
+{% if attention %}<div class="list">{% for item in attention %}<a href="/admin/incidents/{{ item.id }}">{{ severity(item.severity) }}<div class="grow"><div class="ellipsis" style="font-weight:600">{{ item.label }}</div><div class="faint small ellipsis">{{ item.ward or item.lga or "Area not set" }}</div></div><span class="small wait-{{ item.created_at|wait_level }}">{{ item.created_at|waited }}</span></a>{% endfor %}</div>
+{% else %}{{ empty("Queue is clear", "Nothing is waiting for review.") }}{% endif %}</div>
+{% if checks %}<div class="card"><h2>{{ icon("health", 16) }}System status<a class="right link small" href="/admin/health">Details</a></h2>
+<div class="list">{% for check in checks %}<div><span class="dot {{ check.status }}"></span><span class="grow">{{ check.name }}</span><span class="faint small ellipsis" style="max-width:190px">{{ check.detail }}</span></div>{% endfor %}</div></div>{% endif %}
+</div>
 </div>
 {% endblock %}

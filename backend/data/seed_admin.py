@@ -1,4 +1,4 @@
-"""Create the email admin for the admin panel.
+"""Create the email super admin for the admin panel.
 
 Usage:
     python -m data.seed_admin you@example.com
@@ -44,9 +44,15 @@ async def ensure_admin(email: str, password: str, *, reset: bool) -> str:
             # The account may have been made by hand in Supabase without a profile.
             await conn.execute(
                 "INSERT INTO profiles (id, email, role, display_name) "
-                "VALUES ($1, lower($2), 'admin', 'Admin') ON CONFLICT (id) DO NOTHING",
+                "VALUES ($1, lower($2), 'super_admin', 'Admin') ON CONFLICT (id) DO NOTHING",
                 existing,
                 email,
+            )
+            # The seeded admin becomes the first super admin if there is none yet.
+            await conn.execute(
+                "UPDATE profiles SET role = 'super_admin' WHERE id = $1 AND role = 'admin' "
+                "AND NOT EXISTS (SELECT 1 FROM profiles WHERE role = 'super_admin')",
+                existing,
             )
             return "exists"
         async with httpx.AsyncClient(
@@ -62,8 +68,8 @@ async def ensure_admin(email: str, password: str, *, reset: bool) -> str:
             raise RuntimeError(f"Supabase refused ({response.status_code}): {response.text[:300]}")
         await conn.execute(
             "INSERT INTO profiles (id, email, role, display_name) "
-            "VALUES ($1, lower($2), 'admin', 'Admin') "
-            "ON CONFLICT (id) DO UPDATE SET role = 'admin', is_active = true",
+            "VALUES ($1, lower($2), 'super_admin', 'Admin') "
+            "ON CONFLICT (id) DO UPDATE SET role = 'super_admin', is_active = true",
             UUID(response.json()["id"]),
             email,
         )

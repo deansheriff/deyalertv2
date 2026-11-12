@@ -7,6 +7,7 @@ import '../../core/services/repository.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/ui.dart';
 import '../../providers/providers.dart';
+import '../community/community_screens.dart';
 import '../map/map_tab.dart';
 
 class FeedTab extends ConsumerWidget {
@@ -63,12 +64,16 @@ class FeedTab extends ConsumerWidget {
               data: (result) => RefreshIndicator(
                 onRefresh: () async {
                   await ref.read(repositoryProvider).flushQueue();
-                  ref.invalidate(feedProvider);
+                  ref
+                    ..invalidate(announcementsProvider)
+                    ..invalidate(feedProvider);
                   await ref.read(feedProvider.future);
                 },
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 112),
                   children: [
+                    const SanctionNotice(),
+                    const AnnouncementBanner(),
                     if (result.isCached)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),

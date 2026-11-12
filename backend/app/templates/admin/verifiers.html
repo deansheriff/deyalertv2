@@ -1,19 +1,33 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, empty %}
+{% block title %}Verifiers{% endblock %}
+{% block heading %}Verifiers{% endblock %}
+{% block subheading %}<div class="sub">Trusted community members who confirm and update reports in their area.</div>{% endblock %}
 {% block body %}
-<h1>Verifiers</h1>
-<div class="card"><table>
-<tr><th>Name</th><th>Title</th><th>Area</th><th>Status</th><th>Approved by</th><th></th></tr>
-{% for row in rows %}<tr><td>{{ row.display_name or row.phone }}</td><td>{{ row.title or "" }}</td><td>{{ row.lga }}{% if row.ward %} · {{ row.ward }}{% endif %}</td><td><span class="chip">{{ "Active" if row.is_active else "Suspended" }}</span></td><td>{{ row.approved_by or "" }}</td>
-<td>{% if admin.is_admin %}<form method="post" action="/admin/verifiers/{{ row.id }}/toggle"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><button class="btn">{{ "Suspend" if row.is_active else "Reinstate" }}</button></form>{% endif %}</td></tr>
-{% else %}<tr><td colspan="6" class="muted">No verifiers yet.</td></tr>{% endfor %}
-</table></div>
-{% if admin.is_admin %}
-<div class="card"><h2>Add verifier</h2>
-<form method="post" action="/admin/verifiers" class="row"><input type="hidden" name="csrf" value="{{ admin.csrf }}">
-<input name="phone" placeholder="+234..." required>
-<input name="title" placeholder="Community Chairman" required>
-<select name="lga_id" required>{% for lga in lgas %}<option value="{{ lga.id }}">{{ lga.name }}, {{ lga.state }}</option>{% endfor %}</select>
-<input name="ward_name" placeholder="Ward (blank for whole LGA)">
-<button class="btn primary">Approve</button></form></div>
-{% endif %}
+<div class="card"><h2>{{ icon("inbox", 16) }}Applications from the app<span class="right pill {{ 'lime' if applications }}">{{ applications|length }} waiting</span></h2>
+{% if applications %}<div class="list">{% for a in applications %}<div style="align-items:flex-start">
+<span class="avatar">{{ a.full_name[:1]|upper }}</span>
+<div class="grow"><div><b>{{ a.full_name }}</b> · <span class="muted">{{ a.community_role }}</span></div>
+<div class="faint small">{{ a.ward ~ ", " if a.ward }}{{ a.lga }} · applied {{ a.created_at|ago }} · reputation {{ a.reputation_score }} · member since {{ a.joined|when }}</div>
+<div class="small" style="margin-top:6px">{{ a.reason }}</div></div>
+<form method="post" action="/admin/applications/{{ a.id }}" class="stack" style="width:240px">{{ csrf_field(admin) }}
+<input name="title" placeholder="Title shown, e.g. CDA Chairman" value="{{ a.community_role }}">
+<div class="row" style="gap:6px"><button class="btn small primary" name="decision" value="approved">Approve</button><button class="btn small" name="decision" value="rejected">Decline</button></div></form>
+</div>{% endfor %}</div>{% else %}<p class="muted small">No applications waiting. People apply from Profile → Become a verifier in the app.</p>{% endif %}
+</div>
+<div class="card" style="padding:8px">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th style="padding-left:16px">Verifier</th><th>Title</th><th>Area</th><th>Decisions</th><th>Updates</th><th>Approved by</th><th>Status</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr><td style="padding-left:16px"><b>{{ row.display_name or "No name" }}</b><div class="mono faint small">{{ contact(row.phone, row.email) }}</div></td><td>{{ row.title or "" }}</td><td class="muted">{{ row.ward ~ " · " if row.ward }}{{ row.lga }}</td><td>{{ row.decisions }}</td><td>{{ row.updates }}</td><td class="muted">{{ row.approved_by or "" }}</td>
+<td><span class="pill {{ 'good' if row.is_active else 'warn' }}">{{ "Active" if row.is_active else "Suspended" }}</span></td>
+<td><form method="post" action="/admin/verifiers/{{ row.id }}/toggle">{{ csrf_field(admin) }}<button class="btn small">{{ "Suspend" if row.is_active else "Restore" }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty("No verifiers yet") }}{% endif %}
+</div>
+<div class="card"><h2>{{ icon("plus", 16) }}Add a verifier directly</h2>
+<form method="post" action="/admin/verifiers" class="form-grid">{{ csrf_field(admin) }}
+<label class="field">Phone or email of their account<input name="contact" required placeholder="+2348012345678 or name@example.com"></label>
+<label class="field">Title<input name="title" required placeholder="Community Chairman"></label>
+<label class="field">LGA<select name="lga_id">{% for l in lgas %}<option value="{{ l.id }}">{{ l.name }}, {{ l.state }}</option>{% endfor %}</select></label>
+<label class="field">Ward (optional)<input name="ward_name" placeholder="Ward name"></label>
+<div><button class="btn primary">Add verifier</button></div>
+</form></div>
 {% endblock %}

@@ -296,7 +296,15 @@ async def hook(monkeypatch):
     async def phone_on(_session):
         return switch["phone"]
 
+    async def unchanged(_session, base=None):
+        return base
+
+    async def wording(_session):
+        return dict(app_settings.DEFAULT_TEMPLATES)
+
     monkeypatch.setattr(app_settings, "phone_sign_in_enabled", phone_on)
+    monkeypatch.setattr(app_settings, "effective", unchanged)
+    monkeypatch.setattr(app_settings, "message_templates", wording)
     app.dependency_overrides[get_session] = no_session
 
     app.dependency_overrides[get_settings] = lambda: Settings(

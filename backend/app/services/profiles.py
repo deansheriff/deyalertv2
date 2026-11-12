@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ApiError
 from app.core.security import AuthUser
+from app.services import app_settings, sanctions
 
 PROFILE_COLUMNS = """
     id, phone, email, display_name, role, language, alert_radius_km, location_precision,
@@ -32,7 +33,7 @@ class Profile:
 
     @property
     def is_staff(self) -> bool:
-        return self.role in ("moderator", "admin")
+        return self.role in ("moderator", "admin", "super_admin")
 
 
 def normalize_phone(phone: str | None) -> str:
@@ -50,6 +51,8 @@ async def load_or_create(session: AsyncSession, user: AuthUser) -> Profile:
     if row is None:
         if not user.phone and not user.email:
             raise ApiError(403, "contact_required", "A verified email or phone number is required")
+        if (await app_settings.switches(session))["signups_paused"]:
+            raise ApiError(503, "signups_paused", "New sign-ups are paused for now. Try later.")
         await session.execute(
             text(
                 "INSERT INTO profiles (id, phone, email) VALUES (:id, :phone, :email) "
@@ -69,6 +72,7 @@ async def load_or_create(session: AsyncSession, user: AuthUser) -> Profile:
         ).one()
     if not row.is_active:
         raise ApiError(403, "account_disabled", "This account has been disabled")
+    await sanctions.check_account(session, user.id)
     return Profile(
         id=row.id,
         role=row.role,

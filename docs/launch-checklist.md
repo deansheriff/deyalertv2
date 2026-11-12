@@ -41,6 +41,16 @@ The code is complete for an Android pilot. These steps need your accounts, a rea
 - [ ] To give an app user a staff role, have them sign in on the app, then run `python -m data.make_staff +234... moderator`.
 - [ ] Add verifiers at `/admin/verifiers`.
 
+## 4b. Set up the admin panel
+
+- [ ] Sign in as the seeded super admin. Super admins are the only ones who see the audit log, edit Roles & permissions, and create or change admins.
+- [ ] Review Roles & permissions. Defaults: admins hold every permission; moderators moderate, open user profiles (with a recorded reason), reveal exact locations and draft broadcasts; verifiers view and post updates; partners see their own area read-only.
+- [ ] Invite staff under Staff. Limit moderators and partners to their LGAs or wards there. Turn on two-step sign-in for anyone handling sensitive data.
+- [ ] Settings: SMTP (and send a test), incident types, the word filter. System health: kill switches and limits.
+- [ ] Analytics: turn on the weekly email report and add recipients.
+- [ ] Partners: add each organisation, its area, and any webhook endpoints. Send them the signing secret privately.
+- [ ] Broadcasts need two different staff members: one writes, another approves.
+
 ## 5. Build and test the app
 
 ```bash

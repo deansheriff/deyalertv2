@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, flash %}
+{% block title %}Message templates{% endblock %}
+{% block heading %}Message templates{% endblock %}
+{% block subheading %}<div class="sub">Wording of the SMS messages Dey Alert sends. Words in {braces} are filled in automatically.</div>{% endblock %}
+{% block body %}
+{{ flash(notice) }}
+<form method="post" action="/admin/templates" class="card stack" style="max-width:860px">{{ csrf_field(admin) }}
+{% for key, label in labels.items() %}<label class="field">{{ label }}<textarea name="{{ key }}" maxlength="320" style="min-height:64px">{{ current[key] }}</textarea><span class="faint small">Default: {{ defaults[key] }}</span></label>{% endfor %}
+<div class="note">{{ icon("info", 16) }}<span>Keep messages under 160 characters so they send as one SMS. Sign-in emails use their own design and aren't edited here.</span></div>
+<div class="row"><button class="btn primary">Save templates</button><span class="faint small">Clear a box and save to go back to the default.</span></div>
+</form>
+{% endblock %}

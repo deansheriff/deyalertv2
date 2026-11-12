@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, severity, csrf_field, empty %}
+{% block title %}Broadcasts{% endblock %}
+{% block heading %}Broadcasts{% endblock %}
+{% block subheading %}<div class="sub">Official notices to everyone in an area. A second staff member must approve each one.</div>{% endblock %}
+{% block body %}
+<div class="split-wide">
+{% if admin.can("write_broadcasts") %}<div class="card"><h2>{{ icon("broadcast", 16) }}New broadcast</h2>
+<form method="post" action="/admin/broadcasts" class="stack" id="composer">{{ csrf_field(admin) }}
+<label class="field">Title<input name="title" maxlength="80" required placeholder="Flooding on Ikorodu Road"></label>
+<label class="field">Message <span class="faint" id="count">0 / 160 for one SMS</span><textarea name="body" id="body" maxlength="480" required placeholder="Avoid the area until 6pm. Use Agege Motor Road instead."></textarea></label>
+<div class="grid g2"><label class="field">Severity<select name="severity">{% for level in severities %}<option value="{{ level }}" {{ "selected" if level == "medium" }}>{{ level|capitalize }}</option>{% endfor %}</select></label>
+<div class="field">Channels<div class="row" style="height:42px"><label class="check"><input type="checkbox" name="channels" value="push" checked>Push</label><label class="check"><input type="checkbox" name="channels" value="sms">SMS (opted-in only)</label></div></div></div>
+<label class="field">Area {% if admin.scope.all %}<span class="faint">(leave empty for everyone)</span>{% endif %}<select name="lga_ids" id="lgas" multiple style="min-height:130px">{% for l in lgas %}{% if admin.scope.all or l.id in admin.scope.lga_ids %}<option value="{{ l.id }}">{{ l.name }}</option>{% endif %}{% endfor %}</select></label>
+<div class="note">{{ icon("users", 16) }}<span id="estimate">Reaches about … people</span></div>
+<div class="note warn">{{ icon("shield", 16) }}<span>A second staff member must approve before it sends. You can't approve your own.</span></div>
+<button class="btn primary">Submit for approval</button>
+</form></div>{% endif %}
+<div class="card">
+<div class="tabs">{% for name, label in [("pending","Awaiting approval"),("sent","Sent"),("rejected","Rejected")] %}<a class="{{ 'on' if tab == name }}" href="?tab={{ name }}">{{ label }}{% if name == "pending" %} ({{ pending }}){% endif %}</a>{% endfor %}</div>
+{% if rows %}<div class="list">{% for b in rows %}<div style="align-items:flex-start;flex-direction:column;gap:8px">
+<div class="row" style="width:100%">{{ severity(b.severity) }}<b>{{ b.title }}</b><span class="faint small" style="margin-left:auto">{{ b.created_at|ago }}</span></div>
+<div class="muted small">{{ b.body }}</div>
+<div class="faint small">{{ b.area or "Everyone" }} · {{ b.channels|join(" + ")|upper }} · by {{ b.author or "former staff" }}{% if b.decider %} · {{ "approved" if b.status != "rejected" else "rejected" }} by {{ b.decider }}{% endif %}</div>
+{% if b.status in ["sent","sending","approved"] %}<div class="row small"><span class="pill {{ 'good' if b.status == 'sent' }}">{{ b.status|capitalize }}</span>{% if b.status == "sent" %}<span>{{ b.recipients }} people</span><span>Push {{ b.push_sent }} sent{% if b.push_failed %}, {{ b.push_failed }} failed{% endif %}</span><span>SMS {{ b.sms_sent }}</span>{% endif %}</div>{% endif %}
+{% if b.decision_reason %}<div class="faint small">Reason: {{ b.decision_reason }}</div>{% endif %}
+{% if b.status == "pending" and admin.can("approve_broadcasts") %}<form method="post" action="/admin/broadcasts/{{ b.id }}/decide" class="row">{{ csrf_field(admin) }}
+<button class="btn small primary" name="decision" value="approve" {{ "disabled title='You cannot approve your own broadcast'" if b.created_by == admin.profile.id }}>Approve and send</button>
+<input name="reason" placeholder="Reason (if rejecting)" style="height:32px;padding:4px 10px"><button class="btn small" name="decision" value="reject">Reject</button></form>{% endif %}
+</div>{% endfor %}</div>{% else %}{{ empty("Nothing here") }}{% endif %}
+</div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+const body = document.getElementById("body"), count = document.getElementById("count"), lgas = document.getElementById("lgas"), est = document.getElementById("estimate");
+if (body) body.addEventListener("input", () => { const n = body.value.length; count.textContent = `${n} / ${n > 160 ? Math.ceil(n / 153) * 153 + " (" + Math.ceil(n / 153) + " SMS)" : "160 for one SMS"}`; });
+function estimate(){ if (!lgas) return; const q = [...lgas.selectedOptions].map(o => "lga_ids=" + o.value).join("&");
+  fetch("/admin/broadcasts/estimate?" + q).then(r => r.json()).then(d => est.textContent = `Reaches about ${d.people.toLocaleString()} people · ${d.sms.toLocaleString()} by SMS`).catch(() => est.textContent = "Couldn't estimate reach"); }
+if (lgas) { lgas.addEventListener("change", estimate); estimate(); }
+</script>{% endblock %}

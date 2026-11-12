@@ -85,11 +85,42 @@ async def test_password_change_token_cannot_open_the_panel(web, db):  # noqa: F8
     assert (await web.get("/admin")).status_code == 303
 
 
-async def test_pages_render_for_a_moderator(web, db, api, area):  # noqa: F811
+MODERATOR_PAGES = [
+    "/admin", "/admin/queue", "/admin/incidents", "/admin/users", "/admin/map", "/admin/analytics",
+    "/admin/support", "/admin/broadcasts", "/admin/health",
+]
+ADMIN_ONLY_PAGES = ["/admin/staff", "/admin/settings", "/admin/verifiers", "/admin/partners",
+                    "/admin/areas", "/admin/announcements", "/admin/templates", "/admin/privacy"]
+SUPER_ONLY_PAGES = ["/admin/roles", "/admin/audit"]
+
+
+async def test_pages_follow_the_moderator_permissions(web, db, api, area):  # noqa: F811
     await held_incident(api, db)
     signed_in(web, await user(db, role="moderator"))
-    for path in ("/admin", "/admin/queue", "/admin/verifiers", "/admin/users", "/admin/audit", "/admin/settings"):
+    for path in MODERATOR_PAGES:
         assert (await web.get(path)).status_code == 200, path
+    for path in ADMIN_ONLY_PAGES + SUPER_ONLY_PAGES:
+        assert (await web.get(path)).status_code == 403, path
+
+
+async def test_super_admin_sees_every_page(web, db, api, area):  # noqa: F811
+    incident_id, _ = await held_incident(api, db)
+    signed_in(web, await user(db, role="super_admin"))
+    for path in MODERATOR_PAGES + ADMIN_ONLY_PAGES + SUPER_ONLY_PAGES + [
+        f"/admin/incidents/{incident_id}", "/admin/search?q=road", "/admin/map/data?window=7d",
+        "/admin/counts", "/admin/analytics.csv", "/admin/audit.csv",
+    ]:
+        assert (await web.get(path)).status_code == 200, path
+    # The sidebar's variables must not leak into pages (the grid once lost its labels).
+    roles = (await web.get("/admin/roles")).text
+    assert "Reveal exact location" in roles and "Act on incidents" in roles
+
+
+async def test_admins_cannot_open_super_admin_pages(web, db):  # noqa: F811
+    signed_in(web, await user(db, role="admin"))
+    for path in SUPER_ONLY_PAGES:
+        assert (await web.get(path)).status_code == 403, path
+    assert (await web.get("/admin/staff")).status_code == 200
 
 
 async def test_queue_never_shows_reporter_identity_or_true_location(web, db, api, area):  # noqa: F811
@@ -155,18 +186,29 @@ async def test_exact_location_reveal_is_logged(web, db, api, area):  # noqa: F81
     ) == 1
 
 
-async def test_only_admin_changes_roles_and_not_their_own(web, db):  # noqa: F811
+async def test_staff_roles_follow_the_hierarchy(web, db):  # noqa: F811
     member = await user(db)
     moderator = await user(db, role="moderator")
     csrf = signed_in(web, moderator)
-    assert (await web.post(f"/admin/users/{member}/role", data={"role": "admin", "csrf": csrf})).status_code == 403
+    response = await web.post(f"/admin/staff/{member}/role", data={"role": "moderator", "csrf": csrf})
+    assert response.status_code == 403
 
     web.cookies.clear()
     administrator = await user(db, role="admin")
     csrf = signed_in(web, administrator)
-    assert (await web.post(f"/admin/users/{administrator}/role", data={"role": "member", "csrf": csrf})).status_code == 403
-    assert (await web.post(f"/admin/users/{member}/role", data={"role": "moderator", "csrf": csrf})).status_code == 303
+    own = await web.post(f"/admin/staff/{administrator}/role", data={"role": "member", "csrf": csrf})
+    assert own.status_code == 403
+    to_admin = await web.post(f"/admin/staff/{member}/role", data={"role": "admin", "csrf": csrf})
+    assert to_admin.status_code == 403
+    ok = await web.post(f"/admin/staff/{member}/role", data={"role": "moderator", "csrf": csrf})
+    assert ok.status_code == 303
     assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", member) == "moderator"
+
+    web.cookies.clear()
+    csrf = signed_in(web, await user(db, role="super_admin"))
+    promoted = await web.post(f"/admin/staff/{member}/role", data={"role": "admin", "csrf": csrf})
+    assert promoted.status_code == 303
+    assert await db.fetchval("SELECT role FROM profiles WHERE id = $1", member) == "admin"
 
 
 async def test_user_list_masks_phone_numbers(web, db):  # noqa: F811

@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin import routes as admin_routes
-from app.api import app_config, auth_hook, incidents, me, public, sos
+from app.api import app_config, auth_hook, community, incidents, me, public, sos
 from app.core.config import get_settings, production_problems
 from app.core.db import get_session
 from app.core.errors import install_handlers
@@ -30,9 +30,12 @@ app = FastAPI(
     openapi_url=None if is_production else "/openapi.json",
 )
 install_handlers(app)
-app.include_router(me.router)
-app.include_router(incidents.router)
-app.include_router(sos.router)
+# Maintenance mode closes the app's API; sign-in hooks, public pages and config stay up.
+app_api = [Depends(app_config.not_in_maintenance)]
+app.include_router(me.router, dependencies=app_api)
+app.include_router(incidents.router, dependencies=app_api)
+app.include_router(sos.router, dependencies=app_api)
+app.include_router(community.router, dependencies=app_api)
 app.include_router(auth_hook.router)
 app.include_router(public.router)
 app.include_router(app_config.router)

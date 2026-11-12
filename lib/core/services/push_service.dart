@@ -29,7 +29,8 @@ const _channels = {
 Future<void> _show(Map<String, dynamic> data) async {
   final channel = _channels[data['priority']] ?? _channels['normal']!;
   await _notifications.show(
-    id: (data['incident_id'] as String? ?? '').hashCode,
+    // Broadcasts carry their own id so one doesn't replace another.
+    id: (data['incident_id'] as String? ?? data['broadcast_id'] as String? ?? '').hashCode,
     title: data['title'] as String?,
     body: data['body'] as String?,
     notificationDetails: NotificationDetails(

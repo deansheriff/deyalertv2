@@ -106,18 +106,16 @@ async def delete_me(
         await session.commit()
 
 
-@router.get("/me/export")
-async def export_me(
-    profile: Profile = Depends(current_profile),
-    session: AsyncSession = Depends(get_session),
-) -> dict[str, Any]:
+async def export_payload(session: AsyncSession, user_id: UUID) -> dict[str, Any]:
+    """Everything held about one person. Also used for privacy requests in the panel."""
+    params = {"id": user_id}
     contacts = (
         await session.execute(
             text(
                 "SELECT name, phone, relationship, consent_status FROM trusted_contacts "
                 "WHERE user_id = :id"
             ),
-            {"id": profile.id},
+            params,
         )
     ).all()
     reports = (
@@ -127,16 +125,44 @@ async def export_me(
                 "FROM incidents i JOIN incident_reporters r ON r.incident_id = i.id "
                 "WHERE r.reporter_id = :id ORDER BY i.occurred_at DESC"
             ),
-            {"id": profile.id},
+            params,
+        )
+    ).all()
+    zones = (
+        await session.execute(
+            text("SELECT name, kind, radius_m, is_active FROM watch_zones WHERE user_id = :id"),
+            params,
+        )
+    ).all()
+    messages = (
+        await session.execute(
+            text(
+                "SELECT t.category, m.from_staff, m.body, m.created_at FROM support_tickets t "
+                "JOIN support_messages m ON m.ticket_id = t.id "
+                "WHERE t.user_id = :id AND NOT m.is_internal ORDER BY m.created_at"
+            ),
+            params,
         )
     ).all()
     return {
-        "profile": await profile_json(session, profile.id),
+        "profile": await profile_json(session, user_id),
         "trusted_contacts": [dict(row._mapping) for row in contacts],
         "reports": [
             {**row._mapping, "occurred_at": row.occurred_at.isoformat()} for row in reports
         ],
+        "watch_zones": [dict(row._mapping) for row in zones],
+        "support_messages": [
+            {**row._mapping, "created_at": row.created_at.isoformat()} for row in messages
+        ],
     }
+
+
+@router.get("/me/export")
+async def export_me(
+    profile: Profile = Depends(current_profile),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await export_payload(session, profile.id)
 
 
 @router.get("/me/reports")

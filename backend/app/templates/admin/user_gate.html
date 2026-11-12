@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, role, csrf_field %}
+{% block title %}Open profile{% endblock %}
+{% block heading %}Open profile{% endblock %}
+{% block body %}
+<div class="card" style="max-width:620px">
+<div class="row" style="margin-bottom:14px"><span class="avatar">{{ (person.display_name or "?")[:1]|upper }}</span><div><b>{{ person.display_name or "No name" }}</b><div class="mono faint small">{{ contact }}</div></div>{{ role(person.role) }}</div>
+<div class="note warn" style="margin-bottom:14px">{{ icon("shield", 16) }}<span>This profile shows the person's reports, devices, SOS history and sanctions. Opening it is recorded in the audit log with your reason, and stays open to you for 30 minutes.</span></div>
+<form method="post" action="/admin/users/{{ person.id }}/view" class="stack">{{ csrf_field(admin) }}
+<label class="field">Why do you need to open this profile?<textarea name="reason" minlength="10" maxlength="500" required placeholder="e.g. Reviewing a run of false reports from this account"></textarea></label>
+<div class="row"><button class="btn primary">Open profile</button><a class="btn" href="/admin/users">Cancel</a></div>
+</form></div>
+{% endblock %}

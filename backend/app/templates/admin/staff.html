@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, role, csrf_field, empty %}
+{% block title %}Staff{% endblock %}
+{% block heading %}Staff{% endblock %}
+{% block subheading %}<div class="sub">People who can sign in to this panel.</div>{% endblock %}
+{% block actions %}<button class="btn primary" type="button" onclick="document.getElementById('invite').showModal()">{{ icon("plus", 16) }}Invite staff</button>{% endblock %}
+{% block head %}<style>
+dialog{border:1px solid var(--line2);border-radius:24px;background:var(--card);color:var(--text);padding:0;width:min(560px,94vw);max-height:92vh}
+dialog::backdrop{background:rgba(0,0,0,.6);backdrop-filter:blur(3px)}
+dialog .head{display:flex;align-items:center;padding:20px 22px;border-bottom:1px solid var(--line)}
+dialog .head h2{margin:0;font-size:17px}
+dialog .body{padding:20px 22px;overflow:auto}
+.multi{min-height:110px;width:100%}
+.actions-menu{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+</style>{% endblock %}
+{% block body %}
+<div class="tabs">{% for name, label in [("active","Active"),("invited","Invited"),("disabled","Disabled")] %}<a class="{{ 'on' if tab == name }}" href="/admin/staff?tab={{ name }}">{{ label }} ({{ counts[name] }})</a>{% endfor %}</div>
+<div class="card">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Area</th><th>Last sign-in</th><th>Two-step</th><th style="text-align:right">Actions</th></tr></thead><tbody>
+{% for row in rows %}{% set mine = row.id == admin.profile.id %}{% set editable = (not mine) and (row.role in admin_assignable(admin)) %}
+<tr>
+<td><div class="row" style="gap:10px;flex-wrap:nowrap"><span class="avatar">{{ (row.display_name or row.email)[:1]|upper }}</span><div><div style="font-weight:600">{{ row.display_name or "No name" }}{% if mine %} <span class="faint small">(you)</span>{% endif %}</div><div class="faint small">{{ row.email }}</div></div></div></td>
+<td>{% if editable %}<form method="post" action="/admin/staff/{{ row.id }}/role" class="inline">{{ csrf_field(admin) }}<select name="role" onchange="this.form.submit()">{% for value in assignable %}<option value="{{ value }}" {{ "selected" if value == row.role }}>{{ role_labels[value] }}</option>{% endfor %}</select></form>{% else %}{{ role(row.role) }}{% endif %}{% if row.partner %}<div class="faint small">{{ row.partner }}</div>{% endif %}</td>
+<td class="muted">{{ row.scope or "All areas" }}</td>
+<td class="muted">{{ row.last_sign_in|ago if row.last_sign_in else "Never" }}</td>
+<td>{% if editable %}<form method="post" action="/admin/staff/{{ row.id }}/two-step" class="inline">{{ csrf_field(admin) }}<label class="switch" title="Require two-step sign-in"><input type="checkbox" {{ "checked" if row.require_two_step }} onchange="this.form.submit()"><span></span></label></form>{% else %}<span class="pill {{ 'lime' if row.require_two_step }}">{{ "On" if row.require_two_step else "Off" }}</span>{% endif %}</td>
+<td>{% if editable %}<div class="actions-menu">
+<details style="position:relative"><summary class="btn small">Areas</summary><form method="post" action="/admin/staff/{{ row.id }}/scope" class="card" style="position:absolute;right:0;z-index:4;width:320px;margin-top:6px">{{ csrf_field(admin) }}<label class="field">LGAs<select class="multi" name="lga_ids" multiple>{% for lga in lgas %}<option value="{{ lga.id }}">{{ lga.name }}</option>{% endfor %}</select></label><label class="field" style="margin-top:10px">Wards<select class="multi" name="ward_ids" multiple>{% for ward in wards %}<option value="{{ ward.id }}">{{ ward.name }} · {{ ward.lga }}</option>{% endfor %}</select></label><p class="faint small">Leave both empty for all areas.</p><button class="btn small primary">Save areas</button></form></details>
+<form method="post" action="/admin/staff/{{ row.id }}/reset" class="inline" onsubmit="return confirm('Reset this password? They will be signed out everywhere.')">{{ csrf_field(admin) }}<button class="btn small">Reset password</button></form>
+<form method="post" action="/admin/staff/{{ row.id }}/sign-out" class="inline">{{ csrf_field(admin) }}<button class="btn small">Sign out everywhere</button></form>
+{% if row.is_active %}<form method="post" action="/admin/staff/{{ row.id }}/status" class="inline" onsubmit="return confirm('Disable this account? They will not be able to sign in to the panel or the app.')">{{ csrf_field(admin) }}<input type="hidden" name="status" value="disable"><button class="btn small danger">Disable</button></form>
+<form method="post" action="/admin/staff/{{ row.id }}/status" class="inline" onsubmit="return confirm('Remove staff access? Their app account stays.')">{{ csrf_field(admin) }}<input type="hidden" name="status" value="remove"><button class="btn small">Remove access</button></form>
+{% else %}<form method="post" action="/admin/staff/{{ row.id }}/status" class="inline">{{ csrf_field(admin) }}<input type="hidden" name="status" value="enable"><button class="btn small">Enable</button></form>{% endif %}
+</div>{% elif mine %}<span class="faint small">You can't change your own access</span>{% else %}<span class="faint small">Super admin only</span>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div>
+{% else %}{{ empty("No one here", "Invite staff to give them access to the panel.") }}{% endif %}
+</div>
+{% if not admin.is_super %}<p class="faint small">Only super admins can create, change or remove admins.</p>{% endif %}
+<div class="card"><h2>{{ icon("clock", 16) }}Recent sign-in attempts</h2>
+{% if logins %}<div class="table-wrap"><table><thead><tr><th>Time</th><th>Who</th><th>Result</th><th>IP address</th></tr></thead><tbody>
+{% for login in logins %}<tr><td class="mono">{{ login.created_at|when }}</td><td>{{ login.display_name or login.email or "Unknown" }}</td><td>{% if login.outcome == "success" %}<span class="pill good">Signed in</span>{% elif login.outcome == "password_change" %}<span class="pill">Choosing password</span>{% else %}<span class="pill bad">{{ {"bad_password":"Wrong password","not_staff":"Not staff","bad_code":"Wrong code"}.get(login.outcome, login.outcome) }}</span>{% endif %}</td><td class="mono faint">{{ login.ip or "" }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="muted">No sign-ins yet.</p>{% endif %}</div>
+
+<dialog id="invite"><form method="post" action="/admin/staff/invite">{{ csrf_field(admin) }}
+<div class="head"><h2>Invite staff</h2><button type="button" class="icon-btn" style="margin-left:auto" onclick="this.closest('dialog').close()" aria-label="Close">{{ icon("x", 16) }}</button></div>
+<div class="body stack">
+<label class="field">Email<input name="email" type="email" required placeholder="name@example.com"></label>
+<label class="field">Full name<input name="name" placeholder="Adaeze Okafor"></label>
+<label class="field">Role<select name="role" id="invite-role">{% for value in assignable %}<option value="{{ value }}" {{ "selected" if value == "moderator" }}>{{ role_labels[value] }}</option>{% endfor %}</select></label>
+<label class="field" id="partner-field" style="display:none">Partner organisation<select name="partner_id"><option value="">Choose…</option>{% for partner in partners %}<option value="{{ partner.id }}">{{ partner.name }}</option>{% endfor %}</select>{% if not partners %}<span class="faint small">Add a partner first under Partners.</span>{% endif %}</label>
+<div class="grid g2"><label class="field">LGAs (optional)<select class="multi" name="lga_ids" multiple>{% for lga in lgas %}<option value="{{ lga.id }}">{{ lga.name }}</option>{% endfor %}</select></label>
+<label class="field">Wards (optional)<select class="multi" name="ward_ids" multiple>{% for ward in wards %}<option value="{{ ward.id }}">{{ ward.name }} · {{ ward.lga }}</option>{% endfor %}</select></label></div>
+<label class="check"><input type="checkbox" name="require_two_step" value="true">Require two-step sign-in with an authenticator app</label>
+<div class="note">{{ icon("info", 16) }}<span>They get a one-time password by email (if SMTP is set up) and must choose their own at first sign-in. Leave the areas empty to give access to all areas.</span></div>
+<button class="btn primary" style="width:100%">Send invite</button>
+</div></form></dialog>
+{% endblock %}
+{% block scripts %}<script>
+const roleSelect = document.getElementById("invite-role"), partnerField = document.getElementById("partner-field");
+const syncPartner = () => partnerField.style.display = roleSelect.value === "partner" ? "grid" : "none";
+roleSelect.addEventListener("change", syncPartner); syncPartner();
+</script>{% endblock %}

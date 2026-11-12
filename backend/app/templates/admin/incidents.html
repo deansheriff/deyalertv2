@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, severity, status, empty %}
+{% block title %}Incidents{% endblock %}
+{% block heading %}Incidents{% endblock %}
+{% block subheading %}<div class="sub">The latest 200 reports{% if not admin.scope.all %} in your areas{% endif %}.</div>{% endblock %}
+{% block body %}
+<form class="card row" method="get" style="padding:14px">
+<select name="lga"><option value="">All LGAs</option>{% for item in lgas %}<option value="{{ item.id }}" {{ "selected" if filters.lga == item.id|string }}>{{ item.name }}</option>{% endfor %}</select>
+<select name="type"><option value="">All types</option>{% for item in types %}<option value="{{ item.code }}" {{ "selected" if filters.type == item.code }}>{{ item.label }}</option>{% endfor %}</select>
+<select name="severity"><option value="">Any severity</option>{% for level in severities %}<option value="{{ level }}" {{ "selected" if filters.severity == level }}>{{ level|capitalize }}</option>{% endfor %}</select>
+<select name="status"><option value="">Any status</option>{% for value, label in [("unconfirmed","Unverified"),("corroborated","Corroborated"),("confirmed","Confirmed"),("under_review","Under review"),("resolved","Resolved"),("expired","Expired"),("false_report","False report")] %}<option value="{{ value }}" {{ "selected" if filters.status == value }}>{{ label }}</option>{% endfor %}</select>
+<button class="btn primary">Apply</button>
+</form>
+<div class="card" style="padding:8px">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th style="padding-left:16px">Severity</th><th>Type</th><th>Place</th><th>Status</th><th>Corroborations</th><th>Reported</th></tr></thead><tbody>
+{% for row in rows %}<tr><td style="padding-left:16px">{{ severity(row.severity) }}</td><td><a class="link" href="/admin/incidents/{{ row.id }}">{{ row.label }}</a></td><td class="muted">{{ row.location_name or row.ward or row.lga or "—" }}</td><td>{{ status(row.status) }}</td><td>{{ row.corroboration_count }}</td><td class="muted">{{ row.created_at|ago }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty("No incidents match") }}{% endif %}
+</div>
+{% endblock %}

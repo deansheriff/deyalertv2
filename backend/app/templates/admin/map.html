@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Live map{% endblock %}
+{% block heading %}Live map{% endblock %}
+{% block subheading %}<div class="sub">Public, fuzzed locations{% if not admin.scope.all %} in your areas{% endif %}. Refreshes every minute.</div>{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+.content{max-width:none;padding:0;position:relative}
+#map{height:calc(100vh - 73px);background:#0B0E0B}
+.float{position:absolute;z-index:500;background:rgba(20,23,20,.9);border:1px solid var(--line2);border-radius:20px;padding:14px;backdrop-filter:blur(10px)}
+.filters{top:16px;left:16px;width:280px}
+.detail{top:16px;right:16px;width:300px;display:none}
+.legend{bottom:20px;left:16px;font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line2);cursor:pointer;font-size:12px;user-select:none}
+.chip.off{opacity:.35}
+.leaflet-container{font:13px Inter,system-ui,sans-serif}
+.leaflet-control-attribution{background:rgba(10,12,10,.7)!important;color:var(--faint)!important}
+.leaflet-control-attribution a{color:var(--muted)!important}
+</style>{% endblock %}
+{% block body %}
+<div id="map"></div>
+<div class="float filters stack">
+<div class="tabs" style="margin:0" id="windows"><a class="on" data-window="live">Live</a><a data-window="24h">24 h</a><a data-window="7d">7 days</a></div>
+<select id="type" style="width:100%"><option value="">All types</option>{% for t in types %}<option value="{{ t.code }}">{{ t.label }}</option>{% endfor %}</select>
+<div class="row" style="gap:6px" id="sev">{% for level, colour in [("low","#5B9BD5"),("medium","#F5A623"),("high","#F2711C"),("critical","#FF3B30")] %}<span class="chip" data-sev="{{ level }}"><span class="dot" style="background:{{ colour }}"></span>{{ level|capitalize }}</span>{% endfor %}</div>
+<label class="check"><input type="checkbox" id="heat">Show density instead of pins</label>
+<div class="faint small" id="summary">Loading…</div>
+</div>
+<div class="float detail" id="detail"></div>
+<div class="float legend"><div class="row" style="gap:12px"><span class="row" style="gap:6px"><span style="width:14px;height:14px;border-radius:50%;border:2px dashed var(--muted)"></span>Unverified</span><span class="row" style="gap:6px"><span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--muted)"></span>Corroborated</span><span class="row" style="gap:6px"><span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--green)"></span>Confirmed</span></div></div>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const colours = {low:"#5B9BD5", medium:"#F5A623", high:"#F2711C", critical:"#FF3B30"};
+const map = L.map("map", {zoomControl: true}).setView([6.5244, 3.3792], 11);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {maxZoom: 19, attribution: '&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let data = [], windowName = "live", hidden = new Set(), fitted = false;
+function pin(item){
+  const c = colours[item.severity] || "#B4BCB4";
+  const ring = item.status === "confirmed" ? "2px solid #3DD68C" : item.status === "unconfirmed" ? "2px dashed " + c : "2px solid " + c;
+  return L.divIcon({className: "", iconSize: [26, 26], html: `<div style="width:26px;height:26px;border-radius:50%;border:${ring};display:grid;place-items:center;background:rgba(10,12,10,.6)"><div style="width:12px;height:12px;border-radius:50%;background:${c};box-shadow:0 0 12px ${c}"></div></div>`});
+}
+function show(item){
+  const d = document.getElementById("detail");
+  d.style.display = "block";
+  d.innerHTML = `<div class="row" style="margin-bottom:8px"><span class="sev sev-${item.severity}">${item.severity[0].toUpperCase() + item.severity.slice(1)}</span><span class="pill">${item.status.replace("_", " ")}</span></div>
+    <b style="font-size:16px">${item.label}</b><div class="muted small">${item.area || "Area not set"}</div>
+    <div class="faint small" style="margin:8px 0 12px">${new Date(item.created_at).toLocaleString()} · ${item.corroborations} corroborations</div>
+    <a class="btn primary" style="width:100%" href="/admin/incidents/${item.id}">Open incident</a>`;
+}
+function draw(){
+  layer.clearLayers();
+  const type = document.getElementById("type").value;
+  const items = data.filter(i => (!type || i.type === type) && !hidden.has(i.severity));
+  if (document.getElementById("heat").checked) {
+    items.forEach(i => L.circle([i.lat, i.lng], {radius: 600, stroke: false, fillColor: colours[i.severity], fillOpacity: .18}).addTo(layer));
+  } else {
+    items.forEach(i => L.marker([i.lat, i.lng], {icon: pin(i)}).on("click", () => show(i)).addTo(layer));
+  }
+  document.getElementById("summary").textContent = `${items.length} incident${items.length === 1 ? "" : "s"} shown`;
+  if (!fitted && items.length) { map.fitBounds(items.map(i => [i.lat, i.lng]), {padding: [60, 60], maxZoom: 14}); fitted = true; }
+}
+function load(){ fetch(`/admin/map/data?window=${windowName}`).then(r => r.json()).then(d => { data = d; draw(); }); }
+document.querySelectorAll("#windows a").forEach(a => a.addEventListener("click", () => { document.querySelectorAll("#windows a").forEach(x => x.classList.remove("on")); a.classList.add("on"); windowName = a.dataset.window; fitted = false; load(); }));
+document.querySelectorAll("#sev .chip").forEach(c => c.addEventListener("click", () => { const s = c.dataset.sev; hidden.has(s) ? hidden.delete(s) : hidden.add(s); c.classList.toggle("off"); draw(); }));
+document.getElementById("type").addEventListener("change", draw);
+document.getElementById("heat").addEventListener("change", draw);
+load(); setInterval(load, 60000);
+</script>
+{% endblock %}

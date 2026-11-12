@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, empty %}
+{% block title %}Announcements{% endblock %}
+{% block heading %}Announcements{% endblock %}
+{% block subheading %}<div class="sub">Notices shown at the top of the feed in the app. No push notification is sent.</div>{% endblock %}
+{% block body %}
+<div class="split">
+<div class="card" style="padding:8px">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th style="padding-left:16px">Notice</th><th>Area</th><th>Ends</th><th>Status</th><th></th></tr></thead><tbody>
+{% for a in rows %}<tr><td style="padding-left:16px;max-width:380px"><b>{{ a.title }}</b><div class="muted small">{{ a.body }}</div><div class="faint small">{{ a.author or "Former staff" }} · {{ a.created_at|ago }}</div></td><td class="muted">{{ a.lga or "Everyone" }}</td><td class="muted">{{ a.ends_at|when if a.ends_at else "No end" }}</td>
+<td><span class="pill {{ 'good' if a.live else '' }}">{{ "Showing" if a.live else ("Hidden" if not a.is_active else "Ended") }}</span></td>
+<td><form method="post" action="/admin/announcements/{{ a.id }}/toggle">{{ csrf_field(admin) }}<button class="btn small">{{ "Hide" if a.is_active else "Show" }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty("No announcements yet") }}{% endif %}
+</div>
+<div class="card sticky"><h2>{{ icon("announce", 16) }}Post a notice</h2>
+<form method="post" action="/admin/announcements" class="stack">{{ csrf_field(admin) }}
+<label class="field">Title<input name="title" maxlength="80" required placeholder="Road works this weekend"></label>
+<label class="field">Message<textarea name="body" maxlength="400" required placeholder="Obafemi Awolowo Way is closed Saturday and Sunday."></textarea></label>
+<label class="field">Area<select name="lga_id">{% if admin.scope.all %}<option value="">Everyone</option>{% endif %}{% for l in lgas %}{% if admin.scope.all or l.id in admin.scope.lga_ids %}<option value="{{ l.id }}">{{ l.name }}</option>{% endif %}{% endfor %}</select></label>
+<label class="field">Show for<select name="days"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></label>
+<button class="btn primary">Post notice</button></form></div>
+</div>
+{% endblock %}

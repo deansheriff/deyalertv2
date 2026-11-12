@@ -7,8 +7,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.errors import ApiError, not_found
+from app.services import app_settings, sanctions
 from app.services.areas import Area, resolve_area
 from app.services.moderation import needs_review
 from app.services.profiles import Profile
@@ -108,7 +108,11 @@ async def create_incident(session: AsyncSession, profile: Profile, new: NewIncid
             raise ApiError(409, "client_id_conflict", "This report id is already in use")
         return Result(await _summary(session, existing.id), created=False)
 
-    settings = get_settings()
+    await sanctions.check_reporting(session, profile.id)
+    switches = await app_settings.switches(session)
+    if switches["reports_paused"] and not switches["reports_paused_lgas"]:
+        raise ApiError(503, "reports_paused", "New reports are paused for now. Try again later.")
+    settings = await app_settings.effective(session)
     cap = (
         settings.new_account_daily_report_cap
         if profile.account_age < MIN_CORROBORATOR_AGE or profile.reputation_score < 0
@@ -143,6 +147,8 @@ async def create_incident(session: AsyncSession, profile: Profile, new: NewIncid
         await _require_device(session, profile.id, new.device_id)
 
     area = await resolve_area(session, new.lat, new.lng)
+    if switches["reports_paused"] and area.lga_id in switches["reports_paused_lgas"]:
+        raise ApiError(503, "reports_paused", "New reports are paused in this area for now.")
     if new.is_anonymous or incident_type.sensitive:
         mode = "lga" if profile.location_precision == "lga" else "ward"
     else:
@@ -153,7 +159,10 @@ async def create_incident(session: AsyncSession, profile: Profile, new: NewIncid
     occurred_at = _clamp_occurred(new.occurred_at, now)
     ttl = timedelta(minutes=settings.ttl_override_minutes or incident_type.ttl_minutes)
     expires_at = occurred_at + ttl
-    held = needs_review(new.description)
+    words = await app_settings.word_filter(session)
+    matched = app_settings.matched_word(new.description, words["words"]) if words["hold"] else None
+    held = needs_review(new.description) or matched is not None
+    hold_reason = f"word filter: {matched}" if matched else "automatic text check" if held else None
     status = "under_review" if held else "expired" if expires_at <= now else "unconfirmed"
 
     incident_id = (
@@ -162,11 +171,11 @@ async def create_incident(session: AsyncSession, profile: Profile, new: NewIncid
                 f"""
                 INSERT INTO incidents (client_id, type_code, description, location, public_location,
                     location_name, lga_id, ward_id, status, severity, is_anonymous, is_hidden,
-                    hidden_reason, occurred_at, expires_at)
+                    hidden_reason, hold_reason, occurred_at, expires_at)
                 VALUES (:client_id, :type_code, :description, {POINT},
                     ST_SetSRID(ST_MakePoint(:public_lng, :public_lat), 4326)::geography,
                     :location_name, :lga_id, :ward_id, :status, :severity, :anonymous, :hidden,
-                    :hidden_reason, :occurred_at, :expires_at)
+                    :hidden_reason, :hold_reason, :occurred_at, :expires_at)
                 ON CONFLICT (client_id) DO NOTHING
                 RETURNING id
                 """
@@ -187,6 +196,7 @@ async def create_incident(session: AsyncSession, profile: Profile, new: NewIncid
                 "anonymous": new.is_anonymous,
                 "hidden": held,
                 "hidden_reason": "automatic text check" if held else None,
+                "hold_reason": hold_reason,
                 "occurred_at": occurred_at,
                 "expires_at": expires_at,
             },
@@ -322,7 +332,8 @@ async def corroborate(
     lng: float,
     device_id: UUID,
 ) -> Result:
-    settings = get_settings()
+    await sanctions.check_reporting(session, profile.id)
+    settings = await app_settings.effective(session)
     await _require_device(session, profile.id, device_id)
     incident = await _lock(session, incident_id)
     if incident.status not in LIVE_STATUSES:
@@ -430,7 +441,7 @@ async def flag(
     lat: float | None,
     lng: float | None,
 ) -> Result:
-    settings = get_settings()
+    settings = await app_settings.effective(session)
     incident = await _lock(session, incident_id)
     if incident.status in ("false_report", "under_review"):
         raise ApiError(409, "already_under_review", "This report is already being reviewed")
@@ -503,11 +514,14 @@ async def audit(
     entity_id: str,
     reason: str | None = None,
     metadata: str | None = None,
+    ip: str | None = None,
 ) -> None:
     await session.execute(
         text(
-            "INSERT INTO audit_log (actor_id, action, entity_type, entity_id, reason, metadata) "
-            "VALUES (:actor, :action, :entity_type, :entity_id, :reason, CAST(:metadata AS JSONB))"
+            "INSERT INTO audit_log (actor_id, action, entity_type, entity_id, reason, "
+            "metadata, ip) "
+            "VALUES (:actor, :action, :entity_type, :entity_id, :reason, "
+            "CAST(:metadata AS JSONB), CAST(:ip AS INET))"
         ),
         {
             "actor": actor_id,
@@ -516,6 +530,7 @@ async def audit(
             "entity_id": entity_id,
             "reason": reason,
             "metadata": metadata,
+            "ip": ip,
         },
     )
 
@@ -629,7 +644,10 @@ async def verify(
                 "THEN 'corroborated' ELSE 'unconfirmed' END, is_hidden = false, "
                 "hidden_reason = NULL, flag_weight = 0, last_activity_at = NOW() WHERE id = :id"
             ),
-            {"threshold": get_settings().corroboration_threshold, "id": incident_id},
+            {
+                "threshold": (await app_settings.effective(session)).corroboration_threshold,
+                "id": incident_id,
+            },
         )
         await _event(session, incident_id, profile.id, "restored", "under_review", None)
         await _settle_flags(session, incident_id, upheld=False)
@@ -656,6 +674,6 @@ async def is_trusted_reporter(session: AsyncSession, incident_id: UUID) -> bool:
     ).first()
     if row is None:
         return False
-    return row.role in ("verifier", "moderator", "admin") or (
+    return row.role in ("verifier", "moderator", "admin", "super_admin") or (
         row.reputation_score >= TRUSTED_REPORTER_SCORE
     )

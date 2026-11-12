@@ -1,36 +1,60 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, severity, status, csrf_field, empty %}
+{% block title %}{{ incident.label }}{% endblock %}
+{% block heading %}{{ incident.label }}{% endblock %}
+{% block subheading %}<div class="sub mono">{{ incident.id }}</div>{% endblock %}
 {% block body %}
-<h1>{{ incident.label }}</h1>
-<div class="grid2">
+{% if incident.merged_into %}<div class="flash err">{{ icon("merge", 16) }}<span>This report was merged into <a class="link" href="/admin/incidents/{{ incident.merged_into }}">another incident</a>.</span></div>{% endif %}
+<div class="split">
 <div>
-<div class="card"><h2>Report</h2>
-<p><span class="chip">{{ incident.status }}</span> <span class="chip">{{ incident.severity|capitalize }}</span> <span class="muted">{{ incident.created_at.strftime("%d %b %H:%M") }}</span></p>
-<p>{{ incident.description or "No description." }}</p>
-<p class="muted">Public location: {{ "%.4f"|format(incident.public_lat) }}, {{ "%.4f"|format(incident.public_lng) }}{% if incident.location_name %} · {{ incident.location_name }}{% endif %}</p>
-{% if incident.hidden_reason %}<p class="muted">Hidden because: {{ incident.hidden_reason }}</p>{% endif %}
+<div class="card">
+<div class="row" style="margin-bottom:14px">{{ severity(incident.severity) }}{{ status(incident.status) }}{% if incident.is_hidden %}<span class="pill bad">Hidden: {{ incident.hidden_reason }}</span>{% endif %}<span class="pill">{{ incident.corroboration_count }} corroboration{{ "s" if incident.corroboration_count != 1 }}</span><span class="pill">Flag weight {{ incident.flag_weight|float|round(1) }}</span></div>
+<p style="font-size:15px;margin:0 0 14px">{{ incident.description or "No description." }}</p>
+<div class="grid g3 small">
+<div><div class="faint">Place</div>{{ incident.location_name or "—" }}</div>
+<div><div class="faint">Area</div>{{ incident.ward or "No ward" }}{% if incident.lga %}, {{ incident.lga }}{% endif %}</div>
+<div><div class="faint">Public location</div><span class="mono">{{ incident.public_lat|round(4) }}, {{ incident.public_lng|round(4) }}</span></div>
+<div><div class="faint">Reported</div>{{ incident.created_at|when }}</div>
+<div><div class="faint">Expires</div>{{ incident.expires_at|when }}</div>
+<div><div class="faint">Confirmed by</div>{{ incident.confirmed_by_label or "—" }}</div>
 </div>
-<div class="card"><h2>Flags</h2><table>{% for flag in flags %}<tr><td>{{ flag.reason }}</td><td>{{ flag.notes or "" }}</td><td>{{ flag.weight }}</td></tr>{% else %}<tr><td class="muted">No flags.</td></tr>{% endfor %}</table></div>
-<div class="card"><h2>Media</h2>
-{% for item in media %}<form method="post" action="/admin/media/{{ item.id }}" class="row" style="margin-bottom:8px"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><span>{{ item.kind }}</span><span class="chip">{{ item.moderation_status }}</span>
-<button class="btn" name="decision" value="approved">Approve</button><button class="btn" name="decision" value="blurred">Blur</button><button class="btn danger" name="decision" value="rejected">Reject</button></form>
-{% else %}<p class="muted">No media.</p>{% endfor %}</div>
-<div class="card"><h2>Timeline</h2><table>{% for event in events %}<tr><td>{{ event.event_type }}</td><td class="muted">{{ event.note or "" }}</td><td class="muted">{{ event.created_at.strftime("%d %b %H:%M") }}</td></tr>{% endfor %}</table></div>
+{% if incident.hold_reason %}<div class="note warn" style="margin-top:14px">{{ icon("shield", 16) }}<span>Held for review: {{ incident.hold_reason }}</span></div>{% endif %}
 </div>
-<div>
-<div class="card"><h2>Decision</h2>
-<form method="post" action="/admin/incidents/{{ incident.id }}/action"><input type="hidden" name="csrf" value="{{ admin.csrf }}">
-<textarea name="note" rows="2" placeholder="Private note (optional)"></textarea>
-<div class="row" style="margin-top:10px">
-<button class="btn primary" name="action" value="restore">Restore</button>
-<button class="btn danger" name="action" value="mark_false">Mark false</button>
-<button class="btn" name="action" value="extend">Extend 1h</button>
-</div></form></div>
-<div class="card"><h2>Exact location</h2><p class="muted">Viewing it is written to the audit log.</p>
-<form method="post" action="/admin/incidents/{{ incident.id }}/reveal-location"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><textarea name="reason" rows="2" minlength="10" required placeholder="Why is this needed?"></textarea><button class="btn" style="margin-top:8px">Reveal exact location</button></form></div>
-{% if admin.is_admin %}
-<div class="card"><h2>View reporter identity</h2><p class="muted">Admins only. Your name, the time, and your reason are written to the audit log and kept for 24 months.</p>
-<form method="post" action="/admin/incidents/{{ incident.id }}/reporter"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><textarea name="reason" rows="3" minlength="20" required placeholder="Explain why this lookup is necessary"></textarea><button class="btn danger" style="margin-top:8px">Confirm</button></form></div>
-{% else %}<div class="card"><h2>Reporter</h2><p class="muted">Identity hidden.</p></div>{% endif %}
+{% if media %}<div class="card"><h2>{{ icon("eye", 16) }}Photos</h2><div class="list">{% for item in media %}<div><span class="grow">{{ item.kind|capitalize }} · <span class="pill">{{ item.moderation_status|capitalize }}</span></span>{% if admin.can("moderate_media") %}<form method="post" action="/admin/media/{{ item.id }}" class="row" style="gap:6px">{{ csrf_field(admin) }}<button class="btn small" name="decision" value="approved">Approve</button><button class="btn small" name="decision" value="blurred">Keep blurred</button><button class="btn small danger" name="decision" value="rejected">Reject</button></form>{% endif %}</div>{% endfor %}</div></div>{% endif %}
+<div class="card"><h2>{{ icon("broadcast", 16) }}Public updates<span class="right faint small">Shown on the incident in the app</span></h2>
+{% if updates %}<div class="list">{% for update in updates %}<div><div class="grow"><div{% if update.is_hidden %} class="faint" style="text-decoration:line-through"{% endif %}>{{ update.body }}</div><div class="faint small">{{ update.author_label }} · {{ update.created_at|ago }}</div></div>{% if admin.can("act_on_incidents") %}<form method="post" action="/admin/updates/{{ update.id }}/hide">{{ csrf_field(admin) }}<button class="btn small">{{ "Show" if update.is_hidden else "Hide" }}</button></form>{% endif %}</div>{% endfor %}</div>{% else %}<p class="muted small">No updates yet. Verifiers in this area can post them from the app.</p>{% endif %}
+{% if admin.can("add_notes") %}<form method="post" action="/admin/incidents/{{ incident.id }}/updates" class="row" style="margin-top:12px">{{ csrf_field(admin) }}<input name="body" maxlength="500" required placeholder="e.g. Road now clear" style="flex:1"><button class="btn">Post update</button></form>{% endif %}
+</div>
+<div class="card" id="notes"><h2>{{ icon("note", 16) }}Internal notes<span class="right faint small">Staff only</span></h2>
+{% if notes %}<div class="list">{% for note in notes %}<div style="align-items:flex-start"><span class="avatar" style="width:28px;height:28px;font-size:12px">{{ (note.author or "?")[:1]|upper }}</span><div class="grow"><div class="small"><b>{{ note.author or "Former staff" }}</b> <span class="faint">{{ note.created_at|ago }}</span></div><div>{{ note.body }}</div></div></div>{% endfor %}</div>{% else %}<p class="muted small">No notes yet.</p>{% endif %}
+{% if admin.can("add_notes") %}<form method="post" action="/admin/incidents/{{ incident.id }}/notes" style="margin-top:12px">{{ csrf_field(admin) }}<textarea name="body" maxlength="2000" required placeholder="Add a note for other staff"></textarea><button class="btn" style="margin-top:8px">Add note</button></form>{% endif %}
+</div>
+<div class="grid g2">
+<div class="card"><h2>{{ icon("clock", 16) }}Timeline</h2>{% if events %}<div class="list">{% for event in events %}<div><div class="grow"><b class="small">{{ event.event_type|replace("_"," ")|capitalize }}</b>{% if event.note %}<div class="muted small">{{ event.note }}</div>{% endif %}</div><span class="faint small" title="{{ event.actor or '' }}">{{ event.created_at|ago }}</span></div>{% endfor %}</div>{% else %}<p class="muted small">No events.</p>{% endif %}</div>
+<div class="card"><h2>{{ icon("alert", 16) }}Flags</h2>{% if flags %}<div class="list">{% for flag in flags %}<div><div class="grow"><b class="small">{{ flag.reason|replace("_"," ")|capitalize }}</b>{% if flag.notes %}<div class="muted small">{{ flag.notes }}</div>{% endif %}</div><span class="faint small">weight {{ flag.weight|float|round(1) }}</span></div>{% endfor %}</div>{% else %}<p class="muted small">No flags.</p>{% endif %}</div>
+</div>
+</div>
+<div class="sticky">
+<div class="card">
+<h2>{{ icon("verifier", 16) }}Actions</h2>
+{% if admin.can("act_on_incidents") and not incident.merged_into %}
+<form method="post" action="/admin/incidents/{{ incident.id }}/action" class="stack">{{ csrf_field(admin) }}
+<input name="note" placeholder="Note for the timeline (optional)" style="width:100%">
+<button class="btn primary" style="width:100%" name="action" value="confirm">{{ icon("check", 16) }}Confirm</button>
+<div class="grid g2" style="gap:8px"><button class="btn" name="action" value="resolve">Resolve</button><button class="btn" name="action" value="extend">Extend 1 h</button>
+<button class="btn" name="action" value="restore">Restore</button><button class="btn danger" name="action" value="mark_false" onclick="return confirm('Mark this report as false? The reporter loses reputation.')">Mark false</button></div>
+</form>{% else %}<p class="muted small">You can view this incident but not act on it.</p>{% endif %}
+{% if admin.can("view_queue") %}<hr><form method="post" action="/admin/incidents/{{ incident.id }}/claim" class="row">{{ csrf_field(admin) }}<span class="grow small muted">{% if incident.claimed_name %}Claimed by {{ incident.claimed_name }}{% else %}Not claimed{% endif %}</span><button class="btn small">{{ "Release" if incident.claimed_by == admin.profile.id else "Claim" }}</button></form>{% endif %}
+</div>
+{% if admin.can("merge_incidents") and not incident.merged_into %}<div class="card"><h2>{{ icon("merge", 16) }}Possible duplicates</h2>
+{% if duplicates %}<div class="list">{% for item in duplicates %}<div><div class="grow"><a class="link small" href="/admin/incidents/{{ item.id }}">{{ item.metres|int }} m away</a><div class="faint small">{{ item.created_at|ago }} · {{ item.corroboration_count }} corroborations</div></div><form method="post" action="/admin/incidents/{{ incident.id }}/merge" onsubmit="return confirm('Merge that report into this one? It will be hidden and count as a corroboration.')">{{ csrf_field(admin) }}<input type="hidden" name="duplicate_id" value="{{ item.id }}"><button class="btn small">Merge into this</button></form></div>{% endfor %}</div>
+{% else %}<p class="muted small">No similar reports within 1 km and 6 hours.</p>{% endif %}
+{% if merged %}<p class="faint small" style="margin-top:10px">{{ merged|length }} report{{ "s" if merged|length != 1 }} already merged into this one.</p>{% endif %}</div>{% endif %}
+{% if admin.can("reveal_location") or admin.can("lookup_reporter") %}<div class="card"><h2>{{ icon("shield", 16) }}Sensitive</h2>
+<p class="muted small">Requires a reason. Recorded in the audit log.</p>
+{% if admin.can("reveal_location") %}<details><summary>Reveal exact location</summary><form method="post" action="/admin/incidents/{{ incident.id }}/reveal-location" class="stack">{{ csrf_field(admin) }}<textarea name="reason" minlength="10" required placeholder="Why you need the exact location (at least 10 characters)"></textarea><button class="btn">Reveal</button></form></details>{% endif %}
+{% if admin.can("lookup_reporter") %}<details style="margin-top:10px"><summary>Look up reporter</summary><form method="post" action="/admin/incidents/{{ incident.id }}/reporter" class="stack">{{ csrf_field(admin) }}<textarea name="reason" minlength="20" required placeholder="Why you need the reporter's identity (at least 20 characters)"></textarea><button class="btn">Look up</button></form></details>{% endif %}
+</div>{% endif %}
 </div>
 </div>
 {% endblock %}

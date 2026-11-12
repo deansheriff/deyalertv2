@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.services import app_settings
 from app.services.incidents import is_trusted_reporter
 from app.services.messaging import PushProvider, SmsProvider
 
@@ -127,6 +128,17 @@ async def fan_out(
                           AND ST_DWithin(d.alert_point, i.location, :coarse)
                           AND ST_Distance(d.alert_point, i.location)
                               <= LEAST(p.alert_radius_km, :max_km) * 1000
+                          AND p.id IS DISTINCT FROM :reporter
+                        UNION
+                        -- Watch zones: places people asked to hear about, wherever they are.
+                        SELECT d.fcm_token, p.id AS user_id, p.quiet_hours_start,
+                               p.quiet_hours_end, p.phone, p.sms_alerts_opt_in
+                        FROM watch_zones z
+                        JOIN profiles p ON p.id = z.user_id
+                        JOIN devices d ON d.user_id = p.id AND d.is_active
+                        JOIN incidents i ON i.id = :id
+                        WHERE z.is_active AND p.is_active
+                          AND ST_DWithin(z.point, i.location, z.radius_m)
                           AND p.id IS DISTINCT FROM :reporter
                         """
                     ),
@@ -257,7 +269,8 @@ async def _sms_fallback(
         )
     ).first()
     if logged is not None:
-        await sms.send(phone, f"Dey Alert: {incident.label}. {body}")
+        wording = (await app_settings.message_templates(session))["alert_sms"]
+        await sms.send(phone, app_settings.fill(wording, label=incident.label, body=body))
 
 
 EXPIRE_SQL = text(

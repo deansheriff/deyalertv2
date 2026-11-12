@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, empty %}
+{% block title %}Areas{% endblock %}
+{% block heading %}Areas and boundaries{% endblock %}
+{% block subheading %}<div class="sub">LGA and ward shapes place reports in the right area and limit what scoped staff see.</div>{% endblock %}
+{% block body %}
+<div class="split">
+<div class="card" style="padding:8px">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th style="padding-left:16px">LGA</th><th>State</th><th>Shape</th><th>Wards</th><th>Reports (30 days)</th></tr></thead><tbody>
+{% for r in rows %}<tr><td style="padding-left:16px"><b>{{ r.name }}</b></td><td class="muted">{{ r.state }}</td><td>{% if r.has_shape %}<span class="pill good">Loaded</span>{% else %}<span class="pill warn">Missing</span>{% endif %}</td><td>{{ r.wards }}</td><td>{{ r.reports }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty("No areas yet", "Upload LGA boundaries first, then wards.") }}{% endif %}
+</div>
+<div class="card sticky"><h2>{{ icon("area", 16) }}Upload boundaries</h2>
+<form method="post" action="/admin/areas/import" enctype="multipart/form-data" class="stack">{{ csrf_field(admin) }}
+<label class="field">Level<select name="level"><option value="lga">LGAs</option><option value="ward">Wards</option></select></label>
+<label class="field">State<input name="state" required placeholder="Lagos"></label>
+<label class="field">Name property<input name="name_field" required placeholder="lga_name"></label>
+<label class="field">Code property (LGAs, optional)<input name="code_field" placeholder="lga_code"></label>
+<label class="field">GeoJSON file<input type="file" name="file" accept=".json,.geojson,application/geo+json" required></label>
+<div class="note">{{ icon("info", 16) }}<span>Load LGAs before wards; each ward is placed in the LGA that contains it. Existing areas with the same name are updated. Check the data licence before importing.</span></div>
+<button class="btn primary">Import</button></form></div>
+</div>
+{% endblock %}

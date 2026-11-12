@@ -202,6 +202,82 @@ class Repository {
     return row == null ? null : Incident.fromJson(row);
   }
 
+  // Verifier and staff updates on an incident
+  Future<List<IncidentUpdate>> incidentUpdates(String id) async => [
+    for (final row in await _call<List<dynamic>>(() => _dio.get('/v1/incidents/$id/updates')))
+      IncidentUpdate.fromJson(row as Map<String, dynamic>),
+  ];
+
+  Future<void> postIncidentUpdate(String id, String body) =>
+      _call<dynamic>(() => _dio.post('/v1/incidents/$id/updates', data: {'body': body}));
+
+  // Watch zones
+  Future<List<WatchZone>> zones() async => [
+    for (final row in await _call<List<dynamic>>(() => _dio.get('/v1/me/zones')))
+      WatchZone.fromJson(row as Map<String, dynamic>),
+  ];
+
+  Future<void> addZone(Map<String, dynamic> zone) =>
+      _call<dynamic>(() => _dio.post('/v1/me/zones', data: zone));
+
+  Future<void> updateZone(int id, Map<String, dynamic> zone) =>
+      _call<dynamic>(() => _dio.put('/v1/me/zones/$id', data: zone));
+
+  Future<void> deleteZone(int id) => _call<dynamic>(() => _dio.delete('/v1/me/zones/$id'));
+
+  // Announcements from staff, for everyone or this area
+  Future<List<Announcement>> announcements(LatLngPoint? at) async => [
+    for (final row in await _call<List<dynamic>>(
+      () => _dio.get(
+        '/v1/announcements',
+        queryParameters: at == null ? null : {'lat': at.lat, 'lng': at.lng},
+      ),
+    ))
+      Announcement.fromJson(row as Map<String, dynamic>),
+  ];
+
+  // Support
+  Future<List<SupportTicket>> tickets() async => [
+    for (final row in await _call<List<dynamic>>(() => _dio.get('/v1/support')))
+      SupportTicket.fromJson(row as Map<String, dynamic>),
+  ];
+
+  Future<void> openTicket(String category, String message, String? appInfo) => _call<dynamic>(
+    () => _dio.post(
+      '/v1/support',
+      data: {'category': category, 'message': message, 'app_info': appInfo},
+    ),
+  );
+
+  Future<void> replyTicket(int id, String message) =>
+      _call<dynamic>(() => _dio.post('/v1/support/$id/reply', data: {'message': message}));
+
+  // Verifier applications
+  Future<VerifierApplicationInfo> verifierApplication() async => VerifierApplicationInfo.fromJson(
+    await _call<Map<String, dynamic>>(() => _dio.get('/v1/verifier-application')),
+  );
+
+  Future<List<Map<String, dynamic>>> wards(int lgaId) async {
+    final rows = await _db.from('wards').select('id, name').eq('lga_id', lgaId).order('name');
+    return List<Map<String, dynamic>>.from(rows);
+  }
+
+  Future<void> applyToVerify(Map<String, dynamic> application) =>
+      _call<dynamic>(() => _dio.post('/v1/verifier-application', data: application));
+
+  // Sanctions, appeals and data correction
+  Future<List<Sanction>> sanctions() async => [
+    for (final row in await _call<List<dynamic>>(() => _dio.get('/v1/me/sanctions')))
+      Sanction.fromJson(row as Map<String, dynamic>),
+  ];
+
+  Future<void> appeal(int sanctionId, String message) => _call<dynamic>(
+    () => _dio.post('/v1/me/sanctions/$sanctionId/appeal', data: {'message': message}),
+  );
+
+  Future<void> requestCorrection(String details) =>
+      _call<dynamic>(() => _dio.post('/v1/me/privacy-request', data: {'details': details}));
+
   Future<List<TimelineEvent>> timeline(String id) async {
     final rows = await _db
         .from('incident_events_public')

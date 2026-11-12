@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, csrf_field, empty %}
+{% block title %}Partners{% endblock %}
+{% block heading %}Partners{% endblock %}
+{% block subheading %}<div class="sub">Organisations with read-only access to their own area, and signed webhooks to their systems.</div>{% endblock %}
+{% block body %}
+<div class="split">
+<div>
+<div class="card" style="padding:8px">
+{% if rows %}<div class="table-wrap"><table><thead><tr><th style="padding-left:16px">Organisation</th><th>Type</th><th>Area</th><th>Members</th><th>Webhooks</th><th>Last delivery</th><th></th></tr></thead><tbody>
+{% for p in rows %}<tr style="{{ 'background:var(--card2)' if p.id == selected }}"><td style="padding-left:16px"><a class="link" href="?partner={{ p.id }}">{{ p.name }}</a></td><td><span class="pill">{{ kinds.get(p.kind, p.kind) }}</span></td><td class="muted">{{ p.scope or "All areas" }}</td><td>{{ p.members }}</td>
+<td>{% if not p.hooks %}<span class="faint">None</span>{% elif p.failing %}<span class="pill bad">Failing</span>{% else %}<span class="pill good">Active</span>{% endif %}</td><td class="muted">{{ p.last_delivery|ago if p.last_delivery else "—" }}</td>
+<td><form method="post" action="/admin/partners/{{ p.id }}/toggle">{{ csrf_field(admin) }}<button class="btn small">{{ "Switch off" if p.is_active else "Switch on" }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}{{ empty("No partners yet", "Add police divisions, LGA offices or community security groups.") }}{% endif %}
+</div>
+{% if selected %}<div class="card"><h2>{{ icon("link", 16) }}Webhooks{% if hooks %}<form method="post" action="/admin/partners/{{ selected }}/test" class="right">{{ csrf_field(admin) }}<button class="btn small">Send test event</button></form>{% endif %}</h2>
+{% if hooks %}<div class="list">{% for h in hooks %}<div><div class="grow"><div class="mono ellipsis">{{ h.url }}</div><div class="faint small">{{ h.events|join(", ") }} · signing secret whsec_••••</div></div><span class="pill {{ 'good' if h.is_active }}">{{ "On" if h.is_active else "Off" }}</span>
+<form method="post" action="/admin/webhooks/{{ h.id }}/rotate" onsubmit="return confirm('Rotate the signing secret? The partner must update their system.')">{{ csrf_field(admin) }}<button class="btn small">Rotate secret</button></form>
+<form method="post" action="/admin/webhooks/{{ h.id }}/toggle">{{ csrf_field(admin) }}<button class="btn small">{{ "Turn off" if h.is_active else "Turn on" }}</button></form></div>{% endfor %}</div>{% else %}<p class="muted small">No webhooks for this partner.</p>{% endif %}
+<details style="margin-top:12px"><summary>Add a webhook</summary><form method="post" action="/admin/partners/{{ selected }}/webhooks" class="stack">{{ csrf_field(admin) }}
+<label class="field">Endpoint (https)<input name="url" required placeholder="https://partner.example.org/dey-alert"></label>
+<div class="row">{% for key, label in events.items() %}<label class="check"><input type="checkbox" name="events" value="{{ key }}" checked>{{ label }}</label>{% endfor %}</div>
+<button class="btn primary">Add webhook</button></form></details>
+<hr><h2 style="font-size:14px">Recent deliveries</h2>
+{% if deliveries %}<table><thead><tr><th>Event</th><th>Result</th><th>Attempts</th><th>When</th><th></th></tr></thead><tbody>{% for d in deliveries %}<tr><td class="mono small">{{ d.event }}</td><td>{% if d.delivered_at %}<span class="pill good">{{ d.status_code }}</span>{% elif d.status_code %}<span class="pill bad">{{ d.status_code }}</span>{% elif d.error %}<span class="pill bad" title="{{ d.error }}">Error</span>{% else %}<span class="pill">Queued</span>{% endif %}</td><td>{{ d.attempts }}</td><td class="muted">{{ d.created_at|ago }}</td>
+<td>{% if not d.delivered_at and d.attempts %}<form method="post" action="/admin/webhooks/deliveries/{{ d.id }}/retry">{{ csrf_field(admin) }}<button class="btn small">Retry</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="muted small">Nothing sent yet.</p>{% endif %}
+<p class="faint small">Partner staff accounts are created under <a class="link" href="/admin/staff">Staff</a> with the Partner role.</p>
+</div>{% endif %}
+</div>
+<div class="card sticky"><h2>{{ icon("plus", 16) }}Add a partner</h2>
+<form method="post" action="/admin/partners" class="stack">{{ csrf_field(admin) }}
+<label class="field">Organisation<input name="name" required placeholder="Ikeja Police Division"></label>
+<label class="field">Type<select name="kind">{% for key, label in kinds.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
+<label class="field">Area (LGAs)<select name="lga_ids" multiple style="min-height:130px">{% for l in lgas %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></label>
+<p class="faint small">Their staff and webhooks only see incidents in these LGAs. Leave empty for all areas.</p>
+<button class="btn primary">Add partner</button></form></div>
+</div>
+{% endblock %}

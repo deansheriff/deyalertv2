@@ -98,9 +98,9 @@ def code_for(address, action="magiclink", code="654321"):
 
 
 async def test_app_offers_email_only_until_phone_is_switched_on(server):
-    assert (await server.get("/v1/config")).json() == {"sign_in_methods": ["email"]}
+    assert (await server.get("/v1/config")).json()["sign_in_methods"] == ["email"]
     await store(server, app_settings.PHONE_SIGN_IN, True)
-    assert (await server.get("/v1/config")).json() == {"sign_in_methods": ["email", "phone"]}
+    assert (await server.get("/v1/config")).json()["sign_in_methods"] == ["email", "phone"]
 
 
 async def test_email_only_account_gets_a_profile(server, db):  # noqa: F811
@@ -136,7 +136,11 @@ async def test_email_change_confirms_both_addresses(server):
     await save_smtp(server)
     payload = {
         "user": {"email": "old@example.test", "new_email": "new@example.test"},
-        "email_data": {"token": "111111", "token_new": "222222", "email_action_type": "email_change"},
+        "email_data": {
+            "token": "111111",
+            "token_new": "222222",
+            "email_action_type": "email_change",
+        },
     }
     assert (await email_hook(server, payload)).status_code == 200
     assert [(to, "111111" in body or "222222" in body) for to, _, body in server.sent] == [
@@ -245,7 +249,11 @@ async def test_admin_saves_smtp_and_sends_a_test(panel):
     )
     assert "Test email sent" in tested.text
     config, to = panel.sent[0]
-    assert (config.host, config.password, to) == ("smtp2.example.test", "smtp-secret", "me@example.test")
+    assert (config.host, config.password, to) == (
+        "smtp2.example.test",
+        "smtp-secret",
+        "me@example.test",
+    )
 
 
 async def test_failed_test_email_shows_the_reason(panel):
@@ -274,6 +282,9 @@ async def test_moderators_cannot_change_smtp(web, db):  # noqa: F811
 
 async def test_admin_switches_phone_sign_in(panel, db):  # noqa: F811
     await panel.post("/admin/settings/sign-in", data={"enable": "yes", "csrf": panel.csrf})
-    assert await db.fetchval("SELECT value::text FROM app_settings WHERE key = 'phone_sign_in'") == "true"
+    assert (
+        await db.fetchval("SELECT value::text FROM app_settings WHERE key = 'phone_sign_in'")
+        == "true"
+    )
     page = await panel.get("/admin/settings")
     assert "Turn off phone sign-in" in page.text

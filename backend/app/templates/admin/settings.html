@@ -1,37 +1,75 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icon, severity, csrf_field, flash %}
+{% block title %}Settings{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block subheading %}<div class="sub">Kill switches and limits are under <a class="link" href="/admin/health">System health</a>.</div>{% endblock %}
+{% block head %}<style>
+.settings{display:grid;grid-template-columns:200px minmax(0,1fr);gap:20px;align-items:start}
+.subnav{position:sticky;top:88px;display:grid;gap:2px}
+.subnav a{padding:8px 12px;border-radius:999px;text-decoration:none;color:var(--muted)}
+.subnav a:hover{background:var(--card);color:var(--text)}
+section{scroll-margin-top:90px}
+@media (max-width:1100px){.settings{grid-template-columns:1fr}.subnav{display:none}}
+</style>{% endblock %}
 {% block body %}
-<h1>Platform settings</h1>
-<div class="card"><h2>Sign-in</h2>
-<p class="muted">People sign in to the app with a code sent by email. Phone sign-in is {{ "on" if phone_sign_in else "off" }}{% if not phone_sign_in %}; turn it on once an SMS provider is connected{% endif %}.</p>
-{% if admin.is_admin %}<form method="post" action="/admin/settings/sign-in"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="enable" value="{{ 'no' if phone_sign_in else 'yes' }}"><button class="btn {{ 'danger' if phone_sign_in else '' }}">{{ "Turn off phone sign-in" if phone_sign_in else "Turn on phone sign-in" }}</button></form>{% endif %}
-</div>
-<div class="card" id="smtp"><h2>Email (SMTP)</h2>
-<p class="muted">Sign-in codes are sent through this server. {% if smtp %}Sending from {{ smtp.from_name }} &lt;{{ smtp.from_email }}&gt; via {{ smtp.host }}:{{ smtp.port }}.{% else %}Not set up yet, so nobody can sign in by email.{% endif %} Today: {{ email_today }} of {{ config.email_daily_cap }} emails.</p>
-{% if smtp_notice %}<p style="color:var(--lime)">{{ smtp_notice }}</p>{% endif %}
-{% if smtp_error %}<p style="color:var(--red)">{{ smtp_error }}</p>{% endif %}
-{% if admin.is_admin %}
-<form method="post" action="/admin/settings/smtp" class="smtp-form">
-<input type="hidden" name="csrf" value="{{ admin.csrf }}">
-<label>Host<input name="host" required placeholder="smtp.example.com" value="{{ smtp.host if smtp else '' }}"></label>
-<label>Port<input name="port" type="number" min="1" max="65535" required value="{{ smtp.port if smtp else 587 }}"></label>
-<label>Security<select name="security">{% for mode in security_modes %}<option value="{{ mode }}" {{ "selected" if smtp and smtp.security == mode }}>{{ {"starttls": "STARTTLS (port 587)", "ssl": "SSL/TLS (port 465)", "none": "None (not recommended)"}[mode] }}</option>{% endfor %}</select></label>
-<label>Username<input name="username" autocomplete="off" value="{{ smtp.username if smtp else '' }}"></label>
-<label>Password<input name="password" type="password" autocomplete="new-password" placeholder="{{ 'Saved. Leave blank to keep it' if smtp and smtp.has_password else '' }}"></label>
-<label>Sender email<input name="from_email" type="email" required placeholder="alerts@example.com" value="{{ smtp.from_email if smtp else '' }}"></label>
-<label>Sender name<input name="from_name" value="{{ smtp.from_name if smtp else 'Dey Alert' }}"></label>
+{{ flash(notice) }}
+<div class="settings">
+<nav class="subnav">{% if admin.can("manage_settings") %}<a href="#sign-in">Sign-in</a><a href="#smtp">Email (SMTP)</a><a href="#sms">SMS fallback</a>{% endif %}{% if admin.can("manage_incident_types") %}<a href="#types">Incident types</a><a href="#word-filter">Word filter</a>{% endif %}{% if admin.can("edit_templates") %}<a href="/admin/templates">Message templates</a>{% endif %}{% if admin.can("manage_areas") %}<a href="/admin/areas">Areas and boundaries</a>{% endif %}</nav>
+<div>
+{% if admin.can("manage_settings") %}
+<section class="card" id="sign-in"><h2>{{ icon("lock", 16) }}Sign-in</h2>
+<p class="muted">People sign in to the app with a 6-digit code sent by email. Phone sign-in is <b>{{ "on" if phone_sign_in else "off" }}</b>.</p>
+{% if not phone_sign_in %}<p class="faint small">Turn it on once an SMS provider and Supabase's SMS hook are set up; otherwise people will ask for codes that never arrive.</p>{% endif %}
+<form method="post" action="/admin/settings/sign-in">{{ csrf_field(admin) }}<input type="hidden" name="enable" value="{{ 'no' if phone_sign_in else 'yes' }}"><button class="btn {{ 'danger' if phone_sign_in }}">{{ "Turn off phone sign-in" if phone_sign_in else "Turn on phone sign-in" }}</button></form>
+</section>
+<section class="card" id="smtp"><h2>{{ icon("mail", 16) }}Email (SMTP)</h2>
+<p class="muted">Sign-in codes, staff invites and the weekly report go out through this server. {% if smtp %}Sending from {{ smtp.from_name }} &lt;{{ smtp.from_email }}&gt; via {{ smtp.host }}:{{ smtp.port }}.{% else %}<b>Not set up yet</b>, so nobody can sign in by email.{% endif %}</p>
+{{ flash(smtp_notice, smtp_error) }}
+<form method="post" action="/admin/settings/smtp" class="form-grid">{{ csrf_field(admin) }}
+<label class="field">Host<input name="host" required placeholder="smtp.example.com" value="{{ smtp.host if smtp else '' }}"></label>
+<label class="field">Port<input name="port" type="number" min="1" max="65535" required value="{{ smtp.port if smtp else 587 }}"></label>
+<label class="field">Security<select name="security">{% for mode in security_modes %}<option value="{{ mode }}" {{ "selected" if smtp and smtp.security == mode }}>{{ {"starttls": "STARTTLS (port 587)", "ssl": "SSL/TLS (port 465)", "none": "None (not recommended)"}[mode] }}</option>{% endfor %}</select></label>
+<label class="field">Username<input name="username" autocomplete="off" value="{{ smtp.username if smtp else '' }}"></label>
+<label class="field">Password<input name="password" type="password" autocomplete="new-password" placeholder="{{ 'Saved. Leave blank to keep it' if smtp and smtp.has_password else '' }}"></label>
+<label class="field">Sender email<input name="from_email" type="email" required placeholder="alerts@example.com" value="{{ smtp.from_email if smtp else '' }}"></label>
+<label class="field">Sender name<input name="from_name" value="{{ smtp.from_name if smtp else 'Dey Alert' }}"></label>
 <div><button class="btn primary">Save SMTP settings</button></div>
 </form>
-{% if smtp %}<form method="post" action="/admin/settings/smtp/test" class="row" style="margin-top:14px"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input name="to" type="email" required placeholder="Send a test to…" style="min-width:260px"><button class="btn">Send test email</button></form>{% endif %}
+{% if smtp %}<form method="post" action="/admin/settings/smtp/test" class="row" style="margin-top:14px">{{ csrf_field(admin) }}<input name="to" type="email" required placeholder="Send a test to…" style="min-width:260px"><button class="btn">Send test email</button></form>{% endif %}
+<p class="faint small" style="margin-top:12px">The password is stored encrypted. If ADMIN_SESSION_SECRET changes, enter it again.</p>
+</section>
+<section class="card" id="sms"><h2>{{ icon("broadcast", 16) }}SMS alert fallback</h2>
+<p class="muted">Sends SMS to opted-in users for confirmed critical alerts. Currently <b>{{ "on" if sms_on and config.sms_fallback_enabled else "off" }}</b>{% if not config.sms_fallback_enabled %} (SMS_FALLBACK_ENABLED is off on the server){% endif %}.</p>
+<form method="post" action="/admin/settings/sms">{{ csrf_field(admin) }}<input type="hidden" name="enable" value="{{ 'no' if sms_on else 'yes' }}"><button class="btn {{ 'danger' if sms_on }}">{{ "Turn off SMS fallback" if sms_on else "Turn on SMS fallback" }}</button></form>
+</section>
+{% endif %}
+{% if admin.can("manage_incident_types") %}
+<section class="card" id="types"><h2>{{ icon("incident", 16) }}Incident types</h2>
+<div class="table-wrap"><table><thead><tr><th>Type</th><th>Default severity</th><th>Lifetime</th><th>Sensitive</th><th>Active</th><th></th></tr></thead><tbody>
+{% for t in types %}<tr><td colspan="6" style="padding:0"><form method="post" action="/admin/settings/types" style="display:grid;grid-template-columns:2fr 1.3fr 1fr .8fr .8fr auto;gap:10px;align-items:center;padding:10px 12px">{{ csrf_field(admin) }}<input type="hidden" name="code" value="{{ t.code }}">
+<div class="row" style="gap:6px;flex-wrap:nowrap"><select name="icon" style="width:84px">{% for i in icons %}<option {{ "selected" if t.icon == i }}>{{ i }}</option>{% endfor %}</select><input name="label" value="{{ t.label }}" required style="flex:1;min-width:0"></div>
+<select name="default_severity">{% for level in severities %}<option value="{{ level }}" {{ "selected" if t.default_severity == level }}>{{ level|capitalize }}</option>{% endfor %}</select>
+<div class="row" style="gap:6px;flex-wrap:nowrap"><input name="ttl_minutes" type="number" min="15" max="10080" value="{{ t.ttl_minutes }}" style="width:90px"><span class="faint small">min</span></div>
+<label class="switch" title="Sensitive types always use coarse locations"><input type="checkbox" name="sensitive" value="true" {{ "checked" if t.sensitive }}><span></span></label>
+<label class="switch"><input type="checkbox" name="is_active" value="true" {{ "checked" if t.is_active }}><span></span></label>
+<button class="btn small">Save</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+<details style="margin-top:12px"><summary>Add a type</summary><form method="post" action="/admin/settings/types" class="form-grid">{{ csrf_field(admin) }}
+<label class="field">Label<input name="label" required placeholder="Power outage"></label>
+<label class="field">Default severity<select name="default_severity">{% for level in severities %}<option value="{{ level }}">{{ level|capitalize }}</option>{% endfor %}</select></label>
+<label class="field">Lifetime (minutes)<input name="ttl_minutes" type="number" min="15" max="10080" value="240"></label>
+<label class="field">Icon<select name="icon">{% for i in icons %}<option>{{ i }}</option>{% endfor %}</select></label>
+<label class="check"><input type="checkbox" name="sensitive" value="true">Sensitive (coarse location)</label>
+<div><button class="btn primary">Add type</button></div></form></details>
+</section>
+<section class="card" id="word-filter"><h2>{{ icon("shield", 16) }}Word filter</h2>
+<p class="muted">Reports containing any of these words or phrases are held for review instead of going live. Built-in checks for ethnic and religious references, phone numbers and named individuals always apply.</p>
+<form method="post" action="/admin/settings/words" class="stack">{{ csrf_field(admin) }}
+<label class="field">Words and phrases (one per line or comma separated)<textarea name="words" style="min-height:130px" placeholder="one word or phrase per line">{{ words.words|join("\n") }}</textarea></label>
+<label class="check"><input type="checkbox" name="hold" value="true" {{ "checked" if words.hold }}>Hold matching reports for review</label>
+<div class="row"><button class="btn primary">Save word filter</button><span class="faint small">{{ words.words|length }} entr{{ "y" if words.words|length == 1 else "ies" }}</span></div>
+</form></section>
 {% endif %}
 </div>
-<style>.smtp-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;align-items:end}.smtp-form label{display:grid;gap:4px;color:var(--muted);font-size:12px}.smtp-form input,.smtp-form select{width:100%}</style>
-<div class="card"><h2>Corroboration</h2><p class="muted">Radius {{ config.corroboration_radius_m / 1000 }} km · Threshold {{ config.corroboration_threshold }} people. One verifier in scope is enough. Change these in the server environment.</p></div>
-<div class="card"><h2>SMS alert fallback</h2>
-<p class="muted">Sends SMS to opted-in users for confirmed critical alerts. Currently {{ "on" if sms_on and config.sms_fallback_enabled else "off" }}.</p>
-<p class="muted">Today: {{ otp_today }} of {{ config.otp_daily_cap }} sign-in codes, {{ sms_today }} of {{ config.sms_daily_cap }} alert messages.</p>
-{% if admin.is_admin %}<form method="post" action="/admin/settings/sms"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="enable" value="{{ 'no' if sms_on else 'yes' }}"><button class="btn {{ 'danger' if sms_on else '' }}">{{ "Turn off SMS fallback" if sms_on else "Turn on SMS fallback" }}</button></form>{% endif %}
 </div>
-<div class="card"><h2>Incident lifetimes</h2><table>
-{% for item in types %}<tr><td>{{ item.label }}</td><td>{% if admin.is_admin %}<form method="post" action="/admin/settings/ttl" class="row"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="code" value="{{ item.code }}"><input name="minutes" type="number" min="15" max="10080" value="{{ item.ttl_minutes }}" style="width:110px"><span class="muted">minutes</span><button class="btn">Save</button></form>{% else %}{{ item.ttl_minutes }} minutes{% endif %}</td></tr>{% endfor %}
-</table></div>
 {% endblock %}
