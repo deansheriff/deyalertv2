@@ -82,6 +82,11 @@ def message(request: Request, admin: Admin, title: str, value: str, back_to: str
 
 
 def client_ip(request: Request) -> str | None:
+    """The visitor's address. Behind Cloudflare that is CF-Connecting-IP; otherwise uvicorn
+    takes it from the proxy's X-Forwarded-For (it runs with --forwarded-allow-ips)."""
+    cloudflare = request.headers.get("cf-connecting-ip")
+    if cloudflare:
+        return cloudflare.strip()
     return request.client.host if request.client else None
 
 

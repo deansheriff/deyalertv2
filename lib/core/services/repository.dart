@@ -87,13 +87,18 @@ class Repository {
     }
   }
 
-  Future<void> sendCode(SignInTarget target) => target.isPhone
-      ? _db.auth.signInWithOtp(phone: target.value)
-      : _db.auth.signInWithOtp(email: target.value);
+  /// Gives up after this long so a slow network never leaves the button spinning.
+  static const authTimeout = Duration(seconds: 30);
 
-  Future<void> verifyCode(SignInTarget target, String code) => target.isPhone
-      ? _db.auth.verifyOTP(phone: target.value, token: code, type: OtpType.sms)
-      : _db.auth.verifyOTP(email: target.value, token: code, type: OtpType.email);
+  Future<void> sendCode(SignInTarget target) => (target.isPhone
+          ? _db.auth.signInWithOtp(phone: target.value)
+          : _db.auth.signInWithOtp(email: target.value))
+      .timeout(authTimeout);
+
+  Future<void> verifyCode(SignInTarget target, String code) => (target.isPhone
+          ? _db.auth.verifyOTP(phone: target.value, token: code, type: OtpType.sms)
+          : _db.auth.verifyOTP(email: target.value, token: code, type: OtpType.email))
+      .timeout(authTimeout);
 
   bool get signedIn => _db.auth.currentSession != null;
 

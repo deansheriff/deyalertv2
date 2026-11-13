@@ -74,6 +74,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             ? 'Too many attempts. Try again later.'
             : 'We could not send a code. Try again.',
       );
+    } on TimeoutException {
+      setState(() => _error = 'This is taking too long. Check your connection and try again.');
     } on Exception {
       setState(() => _error = 'Could not reach Dey Alert. Check your connection.');
     } finally {

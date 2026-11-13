@@ -6,17 +6,19 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+import structlog
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.clients import get_redis
+from app.core.clients import get_queue, get_redis
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
 from app.services import app_settings, mailer
 from app.services.messaging import SmsProvider, build_sms
 
+log = structlog.get_logger()
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 MAX_SKEW_SECONDS = 300
 _http = httpx.AsyncClient()
@@ -29,7 +31,7 @@ def get_hook_sms() -> SmsProvider:
 def verify_signature(secret: str, msg_id: str, timestamp: str, body: bytes, header: str) -> bool:
     if abs(time.time() - int(timestamp)) > MAX_SKEW_SECONDS:
         return False
-    key = base64.b64decode(secret.removeprefix("v1,").removeprefix("whsec_"))
+    key = base64.b64decode(secret.strip().removeprefix("v1,").removeprefix("whsec_"))
     signed = f"{msg_id}.{timestamp}.".encode() + body
     expected = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
     return any(
@@ -54,6 +56,22 @@ def _signed(request: Request, body: bytes, secret: str) -> bool:
         )
     except (ValueError, IndexError):
         return False
+
+
+def hook_secret_problem(secret: str) -> str | None:
+    """Why a hook secret can't work, or None if it looks usable."""
+    if not secret:
+        return "the secret is not set on the server"
+    key = secret.strip().removeprefix("v1,").removeprefix("whsec_")
+    if secret.strip() in ("v1", "v1,"):
+        return "the secret was cut off at the comma; enter it without the 'v1,' prefix"
+    try:
+        decoded = base64.b64decode(key, validate=True)
+    except ValueError:
+        return "the secret is not valid base64; copy it again exactly"
+    if len(decoded) < 24:
+        return "the secret is too short; it may have been cut off"
+    return None
 
 
 def _hook_error(status: int, message: str) -> JSONResponse:
@@ -106,10 +124,17 @@ async def email_hook(
     redis: Redis = Depends(get_redis),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    queue: Any = Depends(get_queue),
 ) -> Any:
-    """Supabase's Send Email hook: delivers sign-in codes through the panel's SMTP server."""
+    """Supabase's Send Email hook: queues sign-in codes for the panel's SMTP server."""
     body = await request.body()
     if not _signed(request, body, settings.supabase_email_hook_secret):
+        # Say why in the logs; Supabase only shows "Hook requires authorization token".
+        log.warning(
+            "email_hook_rejected",
+            reason=hook_secret_problem(settings.supabase_email_hook_secret)
+            or "signature does not match: the two secrets differ",
+        )
         return _hook_error(401, "Invalid signature")
 
     payload = await request.json()
@@ -137,8 +162,7 @@ async def email_hook(
         ):
             return _hook_error(429, "Too many codes requested")
         subject, text_body, html_body = mailer.code_email(action, code)
-        try:
-            await mailer.send(config, address, subject, text_body, html_body)
-        except mailer.MailError:
-            return _hook_error(502, "Email could not be sent")
+        # Supabase waits only about 5 seconds for this hook, and a slow mail server can take
+        # longer. The worker sends the email (retrying on failure) so this answers at once.
+        await queue.enqueue_job("send_email", address, subject, text_body, html_body)
     return {}

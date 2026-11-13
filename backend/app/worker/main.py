@@ -7,6 +7,7 @@ from uuid import UUID
 
 import httpx
 import sentry_sdk
+import structlog
 from arq import Retry, cron
 from arq.connections import RedisSettings
 from sqlalchemy import text
@@ -20,6 +21,7 @@ from app.services import webhooks as webhook_service
 from app.services.messaging import broadcast, build_push, build_sms
 
 configure_logging()
+log = structlog.get_logger()
 
 
 def recorded(job: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
@@ -102,6 +104,25 @@ async def deliver_webhook(ctx: dict[str, Any], delivery_id: int) -> None:
         # Back off 1, 4, 9, 16 minutes between attempts.
         tries = ctx.get("job_try", 1)
         raise Retry(defer=60 * tries * tries)
+
+
+async def send_email(
+    ctx: dict[str, Any], to: str, subject: str, body: str, html: str | None = None
+) -> bool:
+    """Sign-in codes from Supabase's email hook. Retries a few times if the server fails."""
+    async with ctx["sessions"]() as session:
+        config = await mailer.load(session)
+    if config is None:
+        return False
+    try:
+        await mailer.send(config, to, subject, body, html)
+    except mailer.MailError as error:
+        tries = ctx.get("job_try", 1)
+        if tries >= 3:
+            log.warning("email_failed", error=str(error), tries=tries)
+            return False
+        raise Retry(defer=15 * tries) from error
+    return True
 
 
 async def send_broadcast(ctx: dict[str, Any], broadcast_id: str) -> dict[str, int]:
@@ -237,6 +258,7 @@ class WorkerSettings:
         send_sos_safe,
         send_broadcast,
         deliver_webhook,
+        send_email,
     ]
     cron_jobs = [
         cron(recorded(expire_incidents), name="expire_incidents", second=0),

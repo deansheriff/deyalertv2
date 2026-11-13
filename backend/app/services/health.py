@@ -77,6 +77,18 @@ async def run(session: AsyncSession, redis: Any) -> list[Check]:
             checks.append(Check("Supabase sign-in", "down", str(error)[:120] or "Unreachable"))
     else:
         checks.append(Check("Supabase sign-in", "warn", "SUPABASE_URL is not set"))
+    from app.api.auth_hook import hook_secret_problem  # noqa: PLC0415
+
+    problem = hook_secret_problem(settings.supabase_email_hook_secret)
+    checks.append(
+        Check("Email hook secret", "warn", problem[0].upper() + problem[1:] + ".")
+        if problem
+        else Check(
+            "Email hook secret",
+            "ok",
+            "Set. It must match Supabase's GOTRUE_HOOK_SEND_EMAIL_SECRETS.",
+        )
+    )
     smtp = await mailer.load(session)
     checks.append(
         Check("Email (SMTP)", "ok", f"{smtp.host}:{smtp.port}")

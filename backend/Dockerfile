@@ -17,4 +17,5 @@ COPY . .
 RUN useradd --create-home deyalert
 USER deyalert
 # Access logs are off because tracking and consent links carry tokens in the path.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers"]
+# Only Coolify's proxy can reach this port, so its forwarded client address is trusted.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers", "--forwarded-allow-ips", "*"]

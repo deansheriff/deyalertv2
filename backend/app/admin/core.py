@@ -95,8 +95,11 @@ async def login(
     session: AsyncSession = Depends(get_session),
     redis: Redis = Depends(get_redis),
 ) -> Any:
+    # Limit by account, so one person's mistakes can't lock out everyone behind the same
+    # proxy, and more loosely by address to slow down guessing across many accounts.
     try:
-        await hit_limit(redis, f"rl:admin_login:{client_ip(request)}", 10, 900)
+        await hit_limit(redis, f"rl:admin_login:email:{email.strip().lower()}", 10, 900)
+        await hit_limit(redis, f"rl:admin_login:ip:{client_ip(request)}", 30, 900)
     except ApiError:
         return await _login_page(
             request, session, "Too many attempts. Try again in 15 minutes.", status_code=429
@@ -164,7 +167,7 @@ async def mfa(
     if pending is None:
         return back("/admin/login")
     try:
-        await hit_limit(redis, f"rl:admin_mfa:{client_ip(request)}", 10, 900)
+        await hit_limit(redis, f"rl:admin_mfa:{pending['sub']}", 10, 900)
     except ApiError:
         return templates.TemplateResponse(
             request, "mfa.html", {"error": "Too many attempts.", "enrolment": None}, status_code=429

@@ -384,3 +384,31 @@ def test_role_hierarchy_and_default_grants():
     assert "manage_staff" not in rbac.DEFAULTS["moderator"]
     assert "view_incidents" in rbac.DEFAULTS["partner"] and "act_on_incidents" not in rbac.DEFAULTS["partner"]
 
+
+async def test_admin_sign_in_limits_are_per_account(web, db, monkeypatch):  # noqa: F811
+    async def wrong(email, password):
+        return None
+
+    monkeypatch.setattr(auth, "password_sign_in", wrong)
+    for _ in range(10):
+        await web.post("/admin/login", data={"email": "typo@example.test", "password": "x"})
+    blocked = await web.post("/admin/login", data={"email": "typo@example.test", "password": "x"})
+    assert blocked.status_code == 429
+    # Someone else behind the same proxy can still sign in.
+    other = await web.post("/admin/login", data={"email": "staff@example.test", "password": "x"})
+    assert other.status_code == 401
+
+
+async def test_cloudflare_address_is_recorded(web, db, api, area):  # noqa: F811
+    incident_id, _ = await held_incident(api, db)
+    csrf = signed_in(web, await user(db, role="super_admin"))
+    await web.post(
+        f"/admin/incidents/{incident_id}/reveal-location",
+        data={"reason": "Checking the visitor address", "csrf": csrf},
+        headers={"CF-Connecting-IP": "102.89.1.7"},
+    )
+    ip = await db.fetchval(
+        "SELECT host(ip) FROM audit_log WHERE reason = 'Checking the visitor address'"
+    )
+    assert ip == "102.89.1.7"
+

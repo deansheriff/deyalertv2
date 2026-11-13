@@ -9,14 +9,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core.clients import get_redis
+from app.core.clients import get_queue, get_redis
 from app.core.config import Settings, get_settings
 from app.core.db import get_session
 from app.core.security import AuthUser, get_auth_user
 from app.main import app
 from app.services import app_settings, mailer
 from tests.test_admin import signed_in, web  # noqa: F401
-from tests.test_api_incidents import FakeRedis, db, user  # noqa: F401
+from tests.test_api_incidents import FakeQueue, FakeRedis, db, user  # noqa: F401
 from tests.test_worker_and_sos import SECRET, SECRET_BYTES, hook_headers
 
 SMTP = mailer.SmtpConfig(
@@ -33,6 +33,7 @@ async def server(database_url, migrated, monkeypatch):
     """The API with a real database, fake Redis, and outgoing email captured."""
     engine = create_async_engine(database_url, poolclass=NullPool)
     redis = FakeRedis()
+    queue = FakeQueue()
     sent = []
     signed_in_as = {}
 
@@ -42,6 +43,9 @@ async def server(database_url, migrated, monkeypatch):
 
     async def redis_override():
         yield redis
+
+    async def queue_override():
+        return queue
 
     async def auth(authorization: str = Header(default="")):
         return signed_in_as["user"]
@@ -59,11 +63,13 @@ async def server(database_url, migrated, monkeypatch):
     )
     app.dependency_overrides[get_session] = session_override
     app.dependency_overrides[get_redis] = redis_override
+    app.dependency_overrides[get_queue] = queue_override
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_auth_user] = auth
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         client.sent = sent
+        client.queue = queue
         client.signed_in_as = signed_in_as
         client.engine = engine
         yield client
@@ -122,11 +128,15 @@ async def test_account_without_email_or_phone_is_refused(server):
     assert response.status_code == 403
 
 
-async def test_email_hook_sends_the_code_through_smtp(server):
+def queued(server):
+    return [job for job in server.queue.jobs if job[0] == "send_email"]
+
+
+async def test_email_hook_queues_the_code_for_the_worker(server):
     await save_smtp(server)
     response = await email_hook(server, code_for("Ada@Example.test"))
     assert response.status_code == 200
-    to, subject, body = server.sent[0]
+    _, to, subject, body, _html = queued(server)[0]
     assert to == "ada@example.test"
     assert "654321" in body
     assert "sign-in code" in subject
@@ -143,11 +153,9 @@ async def test_email_change_confirms_both_addresses(server):
         },
     }
     assert (await email_hook(server, payload)).status_code == 200
-    assert [(to, "111111" in body or "222222" in body) for to, _, body in server.sent] == [
-        ("old@example.test", True),
-        ("new@example.test", True),
-    ]
-    assert "222222" in server.sent[1][2]
+    jobs = queued(server)
+    assert [job[1] for job in jobs] == ["old@example.test", "new@example.test"]
+    assert "111111" in jobs[0][3] and "222222" in jobs[1][3]
 
 
 async def test_email_hook_limits_codes_per_address(server):
@@ -155,7 +163,7 @@ async def test_email_hook_limits_codes_per_address(server):
     assert (await email_hook(server, code_for("ada@example.test"))).status_code == 200
     assert (await email_hook(server, code_for("ada@example.test"))).status_code == 200
     assert (await email_hook(server, code_for("ada@example.test"))).status_code == 429
-    assert len(server.sent) == 2
+    assert len(queued(server)) == 2
 
 
 async def test_email_hook_needs_smtp_settings(server):
@@ -164,9 +172,47 @@ async def test_email_hook_needs_smtp_settings(server):
     assert "SMTP" in response.json()["error"]["message"]
 
 
-async def test_email_hook_reports_a_failed_send(server):
+async def test_worker_sends_and_retries_failed_emails(server):
+    from arq import Retry  # noqa: PLC0415
+    from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: PLC0415
+
+    from app.worker.main import send_email  # noqa: PLC0415
+
+    ctx = {"sessions": async_sessionmaker(server.engine, expire_on_commit=False), "job_try": 1}
+    assert await send_email(ctx, "ada@example.test", "Code", "Your code") is False  # no SMTP yet
+    await save_smtp(server)
+    assert await send_email(ctx, "ada@example.test", "Code", "Your code") is True
+    assert server.sent[-1][0] == "ada@example.test"
     await save_smtp(server, mailer.SmtpConfig(**{**SMTP.__dict__, "host": "down.example.test"}))
-    assert (await email_hook(server, code_for("ada@example.test"))).status_code == 502
+    with pytest.raises(Retry):
+        await send_email(ctx, "ada@example.test", "Code", "Your code")
+    assert await send_email({**ctx, "job_try": 3}, "ada@example.test", "Code", "Your code") is False
+
+
+@pytest.mark.parametrize(
+    ("secret", "problem"),
+    [
+        ("", "not set"),
+        ("v1", "cut off at the comma"),
+        ("v1,whsec_not-base64!", "not valid base64"),
+        ("whsec_c2hvcnQ=", "too short"),
+        (SECRET, None),
+        (SECRET.removeprefix("v1,"), None),
+    ],
+)
+def test_hook_secret_problems_are_explained(secret, problem):
+    from app.api.auth_hook import hook_secret_problem  # noqa: PLC0415
+
+    found = hook_secret_problem(secret)
+    assert (found is None) if problem is None else (problem in found)
+
+
+async def test_secret_without_the_v1_prefix_still_verifies(server):
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        supabase_email_hook_secret=SECRET.removeprefix("v1,")
+    )
+    await save_smtp(server)
+    assert (await email_hook(server, code_for("ada@example.test"))).status_code == 200
 
 
 @pytest.mark.parametrize("secret", ["", SECRET])
@@ -180,7 +226,7 @@ async def test_email_hook_rejects_unsigned_requests(server, secret):
     }
     response = await server.post("/v1/auth/email-hook", content=body, headers=headers)
     assert response.status_code == 401
-    assert server.sent == []
+    assert queued(server) == []
 
 
 async def test_smtp_password_is_encrypted_at_rest(server, db):  # noqa: F811
