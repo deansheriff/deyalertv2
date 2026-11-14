@@ -11,6 +11,12 @@ val keyProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+// android/local.properties is not committed, so the Maps key stays out of git.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 android {
     namespace = "ng.deyalert.dey_alert"
     compileSdk = 37
@@ -38,6 +44,7 @@ android {
         manifestPlaceholders["mapsApiKey"] =
             (project.findProperty("MAPS_API_KEY") as String?)
                 ?: System.getenv("MAPS_API_KEY")
+                ?: localProperties.getProperty("MAPS_API_KEY")
                 ?: ""
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.

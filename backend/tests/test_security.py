@@ -122,3 +122,23 @@ async def test_shared_secret_mode_never_reads_the_key_list(shared_secret, monkey
         security, "_jwks_client", SimpleNamespace(get_signing_key_from_jwt=fail)
     )
     assert await authenticate(hs256())
+
+
+@pytest.mark.parametrize(
+    ("secret", "anon_secret", "problem"),
+    [
+        ("", SECRET, "not set"),
+        ("t" * 40, SECRET, "doesn't match"),
+        (SECRET, SECRET, None),
+    ],
+)
+def test_jwt_secret_is_checked_against_the_anon_key(monkeypatch, secret, anon_secret, problem):
+    anon = jwt.encode({"role": "anon", "iss": "supabase"}, anon_secret, algorithm="HS256")
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: Settings(supabase_jwt_secret=secret, supabase_anon_key=anon, supabase_jwks_url=""),
+    )
+    found = security.jwt_secret_problem()
+    assert (found is None) if problem is None else (problem in found)
+

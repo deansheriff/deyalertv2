@@ -78,6 +78,14 @@ async def run(session: AsyncSession, redis: Any) -> list[Check]:
     else:
         checks.append(Check("Supabase sign-in", "warn", "SUPABASE_URL is not set"))
     from app.api.auth_hook import hook_secret_problem  # noqa: PLC0415
+    from app.core.security import jwt_secret_problem  # noqa: PLC0415
+
+    jwt_problem = jwt_secret_problem()
+    checks.append(
+        Check("App sign-in tokens", "down", jwt_problem + ".")
+        if jwt_problem
+        else Check("App sign-in tokens", "ok", "SUPABASE_JWT_SECRET matches Supabase.")
+    )
 
     problem = hook_secret_problem(settings.supabase_email_hook_secret)
     checks.append(

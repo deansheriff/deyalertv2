@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from uuid import UUID
 
 import jwt
+import structlog
 from fastapi import Header
 
 from app.core.config import get_settings
 from app.core.errors import ApiError
 
+log = structlog.get_logger()
 _jwks_client: jwt.PyJWKClient | None = None
 CLAIM_OPTIONS = {"require": ["exp", "sub"]}
 
@@ -61,4 +63,30 @@ async def get_auth_user(authorization: str = Header(default="")) -> AuthUser:
     try:
         return await asyncio.to_thread(decode_token, token)
     except (jwt.PyJWTError, ValueError, KeyError) as exc:
+        # The reason, never the token. "Signature verification failed" usually means
+        # SUPABASE_JWT_SECRET differs from Supabase's JWT secret.
+        log.warning("auth_rejected", reason=f"{type(exc).__name__}: {exc}"[:200])
         raise ApiError(401, "unauthorized", "Invalid session") from exc
+
+
+def jwt_secret_problem() -> str | None:
+    """Checks the configured secret against the anon key, which Supabase signs the same way."""
+    settings = get_settings()
+    if settings.supabase_jwks_url:
+        return None
+    if not settings.supabase_jwt_secret:
+        return "SUPABASE_JWT_SECRET is not set, so no sign-in can be checked"
+    if not settings.supabase_anon_key:
+        return "SUPABASE_ANON_KEY is not set, so the secret can't be checked"
+    try:
+        jwt.decode(
+            settings.supabase_anon_key,
+            settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            options={"verify_aud": False, "verify_exp": False},
+        )
+    except jwt.InvalidSignatureError:
+        return "SUPABASE_JWT_SECRET doesn't match Supabase's JWT secret (SERVICE_PASSWORD_JWT)"
+    except jwt.PyJWTError as exc:
+        return f"The anon key can't be read: {exc}"
+    return None
