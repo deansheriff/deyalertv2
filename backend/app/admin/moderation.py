@@ -113,6 +113,21 @@ async def queue(
     )
     items = [{**row._mapping, "band": _band(row.reputation_score or 0)} for row in rows]
     word_holds = [item for item in items if (item["hold_reason"] or "").startswith("word filter")]
+    held_followups = (
+        await session.execute(
+            text(
+                f"""
+                SELECT u.id, u.body, u.hold_reason, u.created_at, u.incident_id, t.label
+                FROM incident_updates u JOIN incidents i ON i.id = u.incident_id
+                JOIN incident_types t ON t.code = i.type_code
+                WHERE u.kind = 'community' AND u.is_hidden AND u.hold_reason IS NOT NULL
+                  AND {auth.scope_sql()}
+                ORDER BY u.created_at LIMIT 50
+                """
+            ),
+            admin.scope.params(),
+        )
+    ).all()
     return page(
         request,
         admin,
@@ -120,6 +135,7 @@ async def queue(
         items=items,
         photos=photos,
         word_holds=word_holds,
+        held_followups=held_followups,
         filters={"lga": lga, "type": type, "severity": severity, "flags": flags, "sort": sort},
         **await _filter_options(session),
     )
@@ -251,7 +267,8 @@ async def incident_detail(
     updates = (
         await session.execute(
             text(
-                "SELECT id, author_label, body, created_at, is_hidden FROM incident_updates "
+                "SELECT id, kind, author_label, body, created_at, is_hidden, hold_reason "
+                "FROM incident_updates "
                 "WHERE incident_id = :id ORDER BY created_at DESC"
             ),
             params,
@@ -424,7 +441,9 @@ async def hide_update(
 ) -> RedirectResponse:
     incident_id = await session.scalar(
         text(
-            "UPDATE incident_updates SET is_hidden = NOT is_hidden WHERE id = :id "
+            "UPDATE incident_updates SET is_hidden = NOT is_hidden, "
+            "hold_reason = CASE WHEN is_hidden THEN NULL ELSE hold_reason END "
+            "WHERE id = :id "
             "RETURNING incident_id"
         ),
         {"id": update_id},

@@ -324,17 +324,26 @@ class Announcement {
 
 /// A public update a verifier or staff member posted on an incident.
 class IncidentUpdate {
-  const IncidentUpdate({required this.author, required this.body, required this.at});
+  const IncidentUpdate({
+    required this.author,
+    required this.body,
+    required this.at,
+    this.isCommunity = false,
+  });
 
   factory IncidentUpdate.fromJson(Map<String, dynamic> json) => IncidentUpdate(
     author: json['author'] as String,
     body: json['body'] as String,
     at: DateTime.parse(json['created_at'] as String),
+    isCommunity: json['kind'] == 'community',
   );
 
   final String author;
   final String body;
   final DateTime at;
+
+  /// A follow-up from a member of the public, as opposed to a verifier or staff update.
+  final bool isCommunity;
 }
 
 class SupportMessage {
@@ -431,4 +440,26 @@ class VerifierApplicationInfo {
   final String? status;
   final String? area;
   final List<Lga> lgas;
+}
+
+/// One row of the nationwide All reports list.
+class ReportListItem {
+  const ReportListItem({required this.incident, required this.updateCount, this.area});
+
+  factory ReportListItem.fromJson(Map<String, dynamic> json) => ReportListItem(
+    incident: Incident.fromJson(json),
+    area: json['area'] as String?,
+    updateCount: json['update_count'] as int? ?? 0,
+  );
+
+  final Incident incident;
+  final String? area;
+  final int updateCount;
+}
+
+class ReportPage {
+  const ReportPage(this.items, this.nextBefore);
+
+  final List<ReportListItem> items;
+  final String? nextBefore;
 }

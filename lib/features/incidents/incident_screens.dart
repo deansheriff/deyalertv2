@@ -213,7 +213,11 @@ class _Detail extends ConsumerWidget {
             onPressed: () => _sheet(context, VerifierSheet(incident, onChanged)),
           ),
         ],
-        IncidentUpdates(incident.id, canPost: canVerify),
+        IncidentUpdates(
+          incident.id,
+          canPost: canVerify,
+          canFollowUp: takesFollowUps(incident),
+        ),
         const SizedBox(height: 20),
         const Meta('TIMELINE'),
         const SizedBox(height: 8),

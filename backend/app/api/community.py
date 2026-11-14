@@ -13,8 +13,9 @@ from app.api.deps import current_profile
 from app.core.db import get_session
 from app.core.errors import ApiError
 from app.core.security import AuthUser, get_auth_user
-from app.services import sanctions
+from app.services import app_settings, sanctions
 from app.services.incidents import _scoped_title
+from app.services.moderation import needs_review
 from app.services.profiles import Profile
 
 router = APIRouter(prefix="/v1", tags=["community"])
@@ -165,8 +166,8 @@ async def incident_updates(
     rows = (
         await session.execute(
             text(
-                "SELECT id, author_label, body, created_at FROM incident_updates "
-                "WHERE incident_id = :id AND NOT is_hidden ORDER BY created_at DESC LIMIT 20"
+                "SELECT id, kind, author_label, body, created_at FROM incident_updates "
+                "WHERE incident_id = :id AND NOT is_hidden ORDER BY created_at DESC LIMIT 50"
             ),
             {"id": incident_id},
         )
@@ -174,12 +175,187 @@ async def incident_updates(
     return [
         {
             "id": row.id,
+            "kind": row.kind,
             "author": row.author_label,
             "body": row.body,
             "created_at": row.created_at.isoformat(),
         }
         for row in rows
     ]
+
+
+# Community follow-ups: anyone can add what they've seen since, even after confirmation.
+
+FOLLOWUP_STATUSES = ("unconfirmed", "corroborated", "confirmed")
+FOLLOWUPS_PER_INCIDENT_PER_DAY = 3
+FOLLOWUPS_PER_DAY = 20
+COMMUNITY_LABEL = "Community member"
+
+
+@router.post("/incidents/{incident_id}/followups", status_code=201)
+async def post_followup(
+    incident_id: UUID,
+    body: UpdateIn,
+    profile: Profile = Depends(current_profile),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await sanctions.check_reporting(session, profile.id)
+    incident = (
+        await session.execute(
+            text("SELECT status, is_hidden, merged_into FROM incidents WHERE id = :id"),
+            {"id": incident_id},
+        )
+    ).first()
+    if incident is None or incident.is_hidden or incident.merged_into is not None:
+        raise ApiError(404, "not_found", "Report not found")
+    if incident.status not in FOLLOWUP_STATUSES:
+        raise ApiError(409, "closed", "This report is closed, so follow-ups are off")
+    counts = (
+        await session.execute(
+            text(
+                "SELECT count(*) FILTER (WHERE incident_id = :incident) AS here, count(*) AS total "
+                "FROM incident_updates WHERE author_id = :author AND kind = 'community' "
+                "AND created_at > NOW() - INTERVAL '24 hours'"
+            ),
+            {"incident": incident_id, "author": profile.id},
+        )
+    ).one()
+    if counts.here >= FOLLOWUPS_PER_INCIDENT_PER_DAY or counts.total >= FOLLOWUPS_PER_DAY:
+        raise ApiError(429, "followup_limit", "You've added several follow-ups today. Thank you!")
+    text_body = body.body.strip()
+    words = await app_settings.word_filter(session)
+    matched = app_settings.matched_word(text_body, words["words"]) if words["hold"] else None
+    if matched:
+        hold_reason: str | None = f"word filter: {matched}"
+    elif needs_review(text_body):
+        hold_reason = "automatic text check"
+    else:
+        hold_reason = None
+    row = (
+        await session.execute(
+            text(
+                "INSERT INTO incident_updates (incident_id, author_id, author_label, body, kind, "
+                "is_hidden, hold_reason) VALUES (:incident, :author, :label, :body, 'community', "
+                ":hidden, :reason) RETURNING id, created_at"
+            ),
+            {
+                "incident": incident_id,
+                "author": profile.id,
+                "label": COMMUNITY_LABEL,
+                "body": text_body,
+                "hidden": hold_reason is not None,
+                "reason": hold_reason,
+            },
+        )
+    ).one()
+    await session.execute(
+        text("UPDATE incidents SET last_activity_at = NOW() WHERE id = :id"), {"id": incident_id}
+    )
+    await session.commit()
+    return {
+        "id": row.id,
+        "kind": "community",
+        "author": COMMUNITY_LABEL,
+        "body": text_body,
+        "created_at": row.created_at.isoformat(),
+        "held": hold_reason is not None,
+    }
+
+
+# All reports, nationwide
+
+ALL_REPORTS_PAGE = 30
+STATUS_FILTERS = {
+    "confirmed": "p.status = 'confirmed'",
+    "unverified": "p.status IN ('unconfirmed','corroborated')",
+    "resolved": "p.status IN ('resolved','expired')",
+}
+
+
+@router.get("/reports")
+async def all_reports(
+    q: str = "",
+    status: str = "",
+    severity: str = "",
+    type_code: str = "",
+    since_hours: int | None = None,
+    before: str | None = None,
+    _: Profile = Depends(current_profile),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Recent public reports everywhere, newest first, for people anywhere to follow."""
+    clauses = ["true"]
+    params: dict[str, Any] = {"limit": ALL_REPORTS_PAGE + 1}
+    if status in STATUS_FILTERS:
+        clauses.append(STATUS_FILTERS[status])
+    if severity in ("low", "medium", "high", "critical"):
+        clauses.append("p.severity = :severity")
+        params["severity"] = severity
+    if type_code:
+        clauses.append("p.type_code = :type_code")
+        params["type_code"] = type_code
+    if since_hours:
+        clauses.append("p.created_at > NOW() - make_interval(hours => :hours)")
+        params["hours"] = min(max(since_hours, 1), 168)
+    if before:
+        clauses.append("p.created_at < CAST(:before AS TIMESTAMPTZ)")
+        params["before"] = before
+    if q.strip():
+        clauses.append(
+            "(p.location_name ILIKE '%' || :q || '%' OR l.name ILIKE '%' || :q || '%' "
+            "OR l.state ILIKE '%' || :q || '%' OR w.name ILIKE '%' || :q || '%' "
+            "OR t.label ILIKE '%' || :q || '%')"
+        )
+        params["q"] = q.strip()[:60]
+    where = " AND ".join(clauses)
+    rows = (
+        await session.execute(
+            text(
+                f"""
+                SELECT p.id, p.type_code, p.description, p.lat, p.lng, p.location_name,
+                       p.lga_id, p.ward_id, p.status, p.severity, p.corroboration_count,
+                       p.occurred_at, p.created_at, p.expires_at, p.confirmed_by_label,
+                       l.name AS lga_name, l.state, w.name AS ward_name,
+                       (SELECT count(*) FROM incident_updates u WHERE u.incident_id = p.id
+                          AND NOT u.is_hidden) AS update_count
+                FROM incidents_public p
+                JOIN incident_types t ON t.code = p.type_code
+                LEFT JOIN lgas l ON l.id = p.lga_id
+                LEFT JOIN wards w ON w.id = p.ward_id
+                WHERE {where}
+                ORDER BY p.created_at DESC
+                LIMIT :limit
+                """
+            ),
+            params,
+        )
+    ).all()
+    items = [
+        {
+            "id": str(row.id),
+            "type_code": row.type_code,
+            "description": row.description,
+            "lat": row.lat,
+            "lng": row.lng,
+            "location_name": row.location_name,
+            "lga_id": row.lga_id,
+            "ward_id": row.ward_id,
+            "status": row.status,
+            "severity": row.severity,
+            "corroboration_count": row.corroboration_count,
+            "occurred_at": row.occurred_at.isoformat(),
+            "created_at": row.created_at.isoformat(),
+            "expires_at": row.expires_at.isoformat(),
+            "confirmed_by_label": row.confirmed_by_label,
+            "area": ", ".join(part for part in (row.ward_name, row.lga_name, row.state) if part),
+            "update_count": row.update_count,
+        }
+        for row in rows[:ALL_REPORTS_PAGE]
+    ]
+    return {
+        "items": items,
+        "next_before": items[-1]["created_at"] if len(rows) > ALL_REPORTS_PAGE else None,
+    }
 
 
 @router.post("/incidents/{incident_id}/updates", status_code=201)

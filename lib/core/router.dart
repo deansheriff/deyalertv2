@@ -3,9 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_screens.dart';
 import '../features/community/community_screens.dart';
+import '../features/feed/all_reports_tab.dart';
 import '../features/feed/feed_tab.dart';
 import '../features/incidents/incident_screens.dart';
-import '../features/map/map_tab.dart';
 import '../features/onboarding/onboarding_screens.dart';
 import '../features/report/report_screens.dart';
 import '../features/settings/profile_screens.dart';
@@ -50,12 +50,12 @@ String? gateRedirect({
     '/permissions/notifications',
     '/profile-setup',
   };
-  return setup.contains(location) ? '/map' : null;
+  return setup.contains(location) ? '/all' : null;
 }
 
 GoRouter buildRouter(AppState state, Repository repository) => GoRouter(
   navigatorKey: rootNavigatorKey,
-  initialLocation: '/map',
+  initialLocation: '/all',
   refreshListenable: state,
   redirect: (_, routerState) => gateRedirect(
     location: routerState.matchedLocation,
@@ -87,7 +87,10 @@ GoRouter buildRouter(AppState state, Repository repository) => GoRouter(
       builder: (_, routerState, child) =>
           HomeShell(location: routerState.matchedLocation, child: child),
       routes: [
-        GoRoute(path: '/map', pageBuilder: (_, _) => const NoTransitionPage(child: MapTab())),
+        GoRoute(
+          path: '/all',
+          pageBuilder: (_, _) => const NoTransitionPage(child: AllReportsTab()),
+        ),
         GoRoute(path: '/feed', pageBuilder: (_, _) => const NoTransitionPage(child: FeedTab())),
         GoRoute(path: '/report', pageBuilder: (_, _) => const NoTransitionPage(child: ReportTab())),
         GoRoute(path: '/sos', pageBuilder: (_, _) => const NoTransitionPage(child: SosTab())),
@@ -154,8 +157,8 @@ class HomeShell extends StatelessWidget {
   final Widget child;
 
   static const _tabs = [
-    ('/map', Icons.map_outlined, 'Map'),
-    ('/feed', Icons.dynamic_feed_outlined, 'Feed'),
+    ('/all', Icons.public, 'All'),
+    ('/feed', Icons.near_me_outlined, 'Near you'),
     ('/report', Icons.add_alert_outlined, 'Report'),
     ('/sos', Icons.emergency_outlined, 'SOS'),
     ('/profile', Icons.person_outline, 'Profile'),
@@ -223,7 +226,9 @@ class _NavItem extends StatelessWidget {
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 52),
+          // The bottom slot allows the whole screen height; take only what the tab needs.
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 22, color: color),

@@ -1045,17 +1045,31 @@ class _AnnouncementBannerState extends ConsumerState<AnnouncementBanner> {
 
 // Verifier updates on an incident
 
+/// Follow-ups stay open while a report is live, including after it is confirmed.
+bool takesFollowUps(Incident incident) =>
+    const {'unconfirmed', 'corroborated', 'confirmed'}.contains(incident.status);
+
 class IncidentUpdates extends ConsumerWidget {
-  const IncidentUpdates(this.incidentId, {required this.canPost, super.key});
+  const IncidentUpdates(
+    this.incidentId, {
+    required this.canPost,
+    this.canFollowUp = false,
+    super.key,
+  });
 
   final String incidentId;
+
+  /// Verifiers and staff post official updates.
   final bool canPost;
+
+  /// Anyone signed in can add a follow-up while the report is live.
+  final bool canFollowUp;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final updates =
         ref.watch(incidentUpdatesProvider(incidentId)).asData?.value ?? const <IncidentUpdate>[];
-    if (updates.isEmpty && !canPost) return const SizedBox.shrink();
+    if (updates.isEmpty && !canPost && !canFollowUp) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1069,7 +1083,11 @@ class IncidentUpdates extends ConsumerWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.verified_user_outlined, size: 20, color: DeyTokens.primary),
+                  Icon(
+                    update.isCommunity ? Icons.person_outline : Icons.verified_user_outlined,
+                    size: 20,
+                    color: update.isCommunity ? DeyTokens.darkSecondaryText : DeyTokens.primary,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -1083,6 +1101,20 @@ class IncidentUpdates extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        if (updates.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 10),
+            child: Meta('No updates yet. Seen something since? Add a follow-up.'),
+          ),
+        if (canFollowUp)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: PillButton(
+              t('Add a follow-up'),
+              icon: Icons.add_comment_outlined,
+              onPressed: () => _sheet(context, _FollowUpSheet(incidentId)),
             ),
           ),
         if (canPost)
@@ -1164,3 +1196,76 @@ class _PostUpdateSheetState extends ConsumerState<_PostUpdateSheet> {
     ],
   );
 }
+
+class _FollowUpSheet extends ConsumerStatefulWidget {
+  const _FollowUpSheet(this.incidentId);
+
+  final String incidentId;
+
+  @override
+  ConsumerState<_FollowUpSheet> createState() => _FollowUpSheetState();
+}
+
+class _FollowUpSheetState extends ConsumerState<_FollowUpSheet> {
+  final _text = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _post() async {
+    if (_text.text.trim().length < 2) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(repositoryProvider).postFollowup(widget.incidentId, _text.text.trim());
+      ref.invalidate(incidentUpdatesProvider(widget.incidentId));
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      showMessage(context, 'Thanks. Your follow-up is posted.');
+    } on Exception catch (error) {
+      if (mounted) showMessage(context, _message(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Heading(
+        t('Add a follow-up'),
+        subtitle: "Share what you've seen since. Your name is never shown.",
+      ),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final quick in const [
+            'Still happening',
+            'Police arrived',
+            "It's over",
+            'Road clear',
+          ])
+            ActionChip(label: Text(quick), onPressed: () => _text.text = quick),
+        ],
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _text,
+        maxLength: 500,
+        minLines: 2,
+        maxLines: 5,
+        decoration: const InputDecoration(hintText: 'What is happening now?', counterText: ''),
+      ),
+      const Meta("Follow-ups are checked. Don't name people or share phone numbers."),
+      const SizedBox(height: 10),
+      PillButton('Post follow-up', glow: true, busy: _busy, onPressed: _post),
+    ],
+  );
+}
+

@@ -757,6 +757,28 @@
       "implemented_in": "lib/features/community/community_screens.dart",
       "review": "pending",
       "note": "Generation requested 2026-11-10 with the brief in prompts.md; Stitch timed out and the screen had not landed when this was built. Compare when it appears."
+    },
+    {
+      "id": "DA-M42",
+      "screen": "All reports tab (replaces the map tab)",
+      "device": "mobile",
+      "phase": 5,
+      "stitch_screen_id": null,
+      "status": "implemented",
+      "implemented_in": "lib/features/feed/all_reports_tab.dart",
+      "review": "pending",
+      "note": "Generation requested 2026-11-14; Stitch timed out. Compare when it appears."
+    },
+    {
+      "id": "DA-M43",
+      "screen": "Incident follow-ups and follow-up sheet",
+      "device": "mobile",
+      "phase": 5,
+      "stitch_screen_id": null,
+      "status": "implemented",
+      "implemented_in": "lib/features/community/community_screens.dart",
+      "review": "pending",
+      "note": "Generation requested 2026-11-14; Stitch timed out. Compare when it appears."
     }
   ],
   "superseded_screen_ids": [

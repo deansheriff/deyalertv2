@@ -1,4 +1,5 @@
 import 'package:dey_alert/core/router.dart';
+import 'package:dey_alert/core/services/location_service.dart';
 import 'package:dey_alert/core/services/offline_queue.dart';
 import 'package:dey_alert/core/services/sms_composer.dart';
 import 'package:dey_alert/core/theme/app_theme.dart';
@@ -6,6 +7,7 @@ import 'package:dey_alert/core/theme/tokens.dart';
 import 'package:dey_alert/core/ui.dart';
 import 'package:dey_alert/features/auth/auth_screens.dart';
 import 'package:dey_alert/features/community/community_screens.dart';
+import 'package:dey_alert/features/feed/all_reports_tab.dart';
 import 'package:dey_alert/features/map/map_tab.dart';
 import 'package:dey_alert/features/sos/sos_screens.dart';
 import 'package:dey_alert/main.dart';
@@ -213,6 +215,18 @@ void main() {
     });
   });
 
+  testWidgets('the tab bar keeps its own height', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.dark,
+        home: const HomeShell(location: '/all', child: Text('Map content')),
+      ),
+    );
+    final tab = find.ancestor(of: find.text('All'), matching: find.byType(InkWell));
+    expect(tester.getSize(tab).height, lessThan(80));
+    expect(find.text('Map content').hitTestable(), findsOneWidget);
+  });
+
   testWidgets('a bottom button keeps its own height and leaves the page visible', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -305,6 +319,69 @@ void main() {
     });
   });
 
+  group('all reports and follow-ups', () {
+    Map<String, dynamic> row({String status = 'confirmed', int updates = 2}) => {
+      'id': 'abc',
+      'type_code': 'roadblock',
+      'description': 'Cars turning back',
+      'lat': 6.6,
+      'lng': 3.35,
+      'location_name': 'Allen Avenue',
+      'lga_id': 1,
+      'ward_id': 2,
+      'status': status,
+      'severity': 'high',
+      'corroboration_count': 3,
+      'occurred_at': '2026-11-14T10:00:00Z',
+      'created_at': '2026-11-14T10:00:00Z',
+      'expires_at': '2100-01-01T00:00:00Z',
+      'confirmed_by_label': 'Community Chairman, Ward 4',
+      'area': 'Ward 4, Ikeja, Lagos',
+      'update_count': updates,
+    };
+
+    test('reads rows from the all-reports list', () {
+      final item = ReportListItem.fromJson(row());
+      expect(item.area, 'Ward 4, Ikeja, Lagos');
+      expect(item.updateCount, 2);
+      expect(item.incident.status, 'confirmed');
+    });
+
+    test('confirmed reports still take follow-ups; closed ones do not', () {
+      expect(takesFollowUps(ReportListItem.fromJson(row()).incident), isTrue);
+      expect(takesFollowUps(ReportListItem.fromJson(row(status: 'resolved')).incident), isFalse);
+    });
+
+    test('updates know who posted them', () {
+      final community = IncidentUpdate.fromJson({
+        'kind': 'community', 'author': 'Community member', 'body': 'Road clear',
+        'created_at': '2026-11-14T10:00:00Z',
+      });
+      expect(community.isCommunity, isTrue);
+    });
+
+    testWidgets('cards show the area, distance and update count', (tester) async {
+      final item = ReportListItem.fromJson(row());
+      await tester.pumpWidget(
+        wrap(
+          IncidentSummaryCard(
+            item.incident,
+            area: item.area,
+            updateCount: item.updateCount,
+            distanceKm: 12.4,
+          ),
+        ),
+      );
+      expect(find.textContaining('Ward 4, Ikeja, Lagos'), findsOneWidget);
+      expect(find.textContaining('12 km away'), findsOneWidget);
+      expect(find.text('2 updates'), findsOneWidget);
+    });
+
+    test('distance between two points', () {
+      expect(distanceKm(const LatLngPoint(6.5244, 3.3792), 9.0765, 7.3986).round(), inInclusiveRange(520, 540));
+    });
+  });
+
   group('email sign-in', () {
     test('accepts and tidies real addresses', () {
       expect(normalizeEmail('  Ada@Example.com '), 'ada@example.com');
@@ -379,15 +456,15 @@ void main() {
     );
 
     test('walks through setup in order', () {
-      expect(gate('/map', language: false), '/language');
-      expect(gate('/map', onboarded: false), '/welcome');
-      expect(gate('/map', signedIn: false), '/sign-in');
-      expect(gate('/map', profile: false), '/permissions/location');
-      expect(gate('/map'), isNull);
+      expect(gate('/all', language: false), '/language');
+      expect(gate('/all', onboarded: false), '/welcome');
+      expect(gate('/all', signedIn: false), '/sign-in');
+      expect(gate('/all', profile: false), '/permissions/location');
+      expect(gate('/all'), isNull);
     });
 
     test('signed-in users cannot return to setup', () {
-      expect(gate('/sign-in'), '/map');
+      expect(gate('/sign-in'), '/all');
     });
 
     test('battery guide stays reachable from settings', () {

@@ -16,6 +16,7 @@ from app.services import app_settings
 from app.services import staff as staff_service
 
 TABS = ("active", "invited", "disabled")
+MIN_PASSWORD = 12
 
 
 async def _areas(session: AsyncSession) -> tuple[list[Any], list[Any]]:
@@ -228,6 +229,56 @@ async def reset_staff_password(
         f"New one-time password for {row.email}",
         f"{password}  ·  They are signed out everywhere and must choose a new password at sign-in. "
         "Share this privately; it is not shown again.",
+        "/admin/staff",
+    )
+
+
+@router.post("/staff/{user_id}/password", response_class=HTMLResponse)
+async def set_staff_password(
+    request: Request,
+    user_id: UUID,
+    new_password: str = Form(),
+    confirm_password: str = Form(),
+    require_change: bool = Form(default=False),
+    admin: Admin = Depends(auth.act("manage_staff")),
+    session: AsyncSession = Depends(get_session),
+) -> HTMLResponse:
+    """Sets a chosen password. Only super admins can do this for admins (see _target)."""
+    row = await _target(session, admin, user_id)
+    error = None
+    if len(new_password) < MIN_PASSWORD:
+        error = f"Use at least {MIN_PASSWORD} characters."
+    elif new_password != confirm_password:
+        error = "The two passwords do not match."
+    elif not await auth.admin_update_user(
+        user_id,
+        {"password": new_password, "app_metadata": {"must_change_password": require_change}},
+    ):
+        error = "Supabase did not accept the new password. Try again."
+    if error:
+        return message(request, admin, "Password not changed", error, "/admin/staff")
+    await staff_service.sign_out_everywhere(session, user_id)
+    # The password itself is never recorded.
+    await record(
+        session,
+        admin,
+        request,
+        "staff_password_set",
+        "profile",
+        str(user_id),
+        details={"role": row.role, "must_change": require_change},
+    )
+    await session.commit()
+    follow = (
+        "They must choose their own at their next sign-in."
+        if require_change
+        else "They can sign in with it now."
+    )
+    return message(
+        request,
+        admin,
+        f"Password changed for {row.email}",
+        f"They have been signed out everywhere. {follow} Share it privately.",
         "/admin/staff",
     )
 

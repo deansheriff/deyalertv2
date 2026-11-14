@@ -250,10 +250,22 @@ class _RoundButton extends StatelessWidget {
 }
 
 class IncidentSummaryCard extends StatelessWidget {
-  const IncidentSummaryCard(this.incident, {this.onTap, super.key});
+  const IncidentSummaryCard(
+    this.incident, {
+    this.onTap,
+    this.area,
+    this.updateCount = 0,
+    this.distanceKm,
+    super.key,
+  });
 
   final Incident incident;
   final VoidCallback? onTap;
+
+  /// Ward, LGA and state, shown where the reader may not know the place.
+  final String? area;
+  final int updateCount;
+  final double? distanceKm;
 
   @override
   Widget build(BuildContext context) {
@@ -282,8 +294,10 @@ class IncidentSummaryCard extends StatelessWidget {
                   [
                     timeAgo(incident.occurredAt),
                     if (incident.locationName != null) incident.locationName!,
+                    if (area != null && area!.isNotEmpty) area!,
+                    if (distanceKm != null) '${distanceKm!.round()} km away',
                   ].join(' · '),
-                  maxLines: 1,
+                  maxLines: area == null ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: DeyTokens.darkSecondaryText,
@@ -298,6 +312,25 @@ class IncidentSummaryCard extends StatelessWidget {
                   children: [
                     SeverityChip(incident.severity),
                     VerificationBadge(incident),
+                    if (updateCount > 0)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.forum_outlined,
+                            size: 14,
+                            color: DeyTokens.darkSecondaryText,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$updateCount update${updateCount == 1 ? '' : 's'}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: DeyTokens.darkSecondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
                 if (incident.description != null) ...[

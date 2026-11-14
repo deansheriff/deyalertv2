@@ -216,6 +216,38 @@ class Repository {
   Future<void> postIncidentUpdate(String id, String body) =>
       _call<dynamic>(() => _dio.post('/v1/incidents/$id/updates', data: {'body': body}));
 
+  Future<void> postFollowup(String id, String body) =>
+      _call<dynamic>(() => _dio.post('/v1/incidents/$id/followups', data: {'body': body}));
+
+  // All reports, everywhere
+  Future<ReportPage> allReports({
+    String query = '',
+    String? status,
+    String? severity,
+    int? sinceHours,
+    String? before,
+  }) async {
+    final page = await _call<Map<String, dynamic>>(
+      () => _dio.get(
+        '/v1/reports',
+        queryParameters: {
+          if (query.trim().isNotEmpty) 'q': query.trim(),
+          'status': ?status,
+          'severity': ?severity,
+          'since_hours': ?sinceHours,
+          'before': ?before,
+        },
+      ),
+    );
+    return ReportPage(
+      [
+        for (final row in page['items'] as List)
+          ReportListItem.fromJson(row as Map<String, dynamic>),
+      ],
+      page['next_before'] as String?,
+    );
+  }
+
   // Watch zones
   Future<List<WatchZone>> zones() async => [
     for (final row in await _call<List<dynamic>>(() => _dio.get('/v1/me/zones')))

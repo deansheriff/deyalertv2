@@ -412,3 +412,107 @@ async def test_cloudflare_address_is_recorded(web, db, api, area):  # noqa: F811
     )
     assert ip == "102.89.1.7"
 
+
+# Follow-ups and all reports
+
+
+async def test_follow_ups_work_on_confirmed_reports(web, api, db, area, clean_settings):  # noqa: F811
+    incident_id = (await report(api, db))["id"]
+    await db.execute("UPDATE incidents SET status = 'confirmed' WHERE id = $1", uuid.UUID(incident_id))
+    person = await user(db)
+    posted = await api.post(
+        f"/v1/incidents/{incident_id}/followups",
+        json={"body": "Police have arrived and the road is open"},
+        headers=bearer(person),
+    )
+    assert posted.status_code == 201
+    assert posted.json()["author"] == "Community member"
+    updates = (await api.get(f"/v1/incidents/{incident_id}/updates", headers=bearer(person))).json()
+    assert updates[0]["kind"] == "community"
+    assert str(person) not in json.dumps(updates)
+
+    for _ in range(2):
+        await api.post(
+            f"/v1/incidents/{incident_id}/followups", json={"body": "Still calm"}, headers=bearer(person)
+        )
+    limited = await api.post(
+        f"/v1/incidents/{incident_id}/followups", json={"body": "Again"}, headers=bearer(person)
+    )
+    assert limited.status_code == 429
+
+
+async def test_closed_reports_take_no_follow_ups(api, db, area):  # noqa: F811
+    incident_id = (await report(api, db))["id"]
+    await db.execute("UPDATE incidents SET status = 'resolved' WHERE id = $1", uuid.UUID(incident_id))
+    response = await api.post(
+        f"/v1/incidents/{incident_id}/followups", json={"body": "Is it over?"}, headers=bearer(await user(db))
+    )
+    assert response.status_code == 409
+
+
+async def test_doubtful_follow_ups_are_held_until_approved(web, api, db, area):  # noqa: F811
+    incident_id = (await report(api, db))["id"]
+    person = await user(db)
+    held = await api.post(
+        f"/v1/incidents/{incident_id}/followups",
+        json={"body": "Call Mr Musa on 08012345678 now"},
+        headers=bearer(person),
+    )
+    assert held.json()["held"] is True
+    assert (await api.get(f"/v1/incidents/{incident_id}/updates", headers=bearer(person))).json() == []
+    csrf = signed_in(web, await user(db, role="moderator"))
+    queue = await web.get("/admin/queue")
+    assert "Call Mr Musa" in queue.text
+    await web.post(f"/admin/updates/{held.json()['id']}/hide", data={"csrf": csrf})
+    shown = (await api.get(f"/v1/incidents/{incident_id}/updates", headers=bearer(person))).json()
+    assert [u["body"] for u in shown] == ["Call Mr Musa on 08012345678 now"]
+
+
+async def test_all_reports_lists_everywhere_with_area_names(api, db, area):  # noqa: F811
+    first = (await report(api, db, location_name="Allen Avenue"))["id"]
+    await report(api, db, location_name="Ojota bus stop")
+    viewer = await user(db)
+    everything = (await api.get("/v1/reports", headers=bearer(viewer))).json()
+    ids = [item["id"] for item in everything["items"]]
+    assert first in ids
+    item = next(i for i in everything["items"] if i["id"] == first)
+    assert "Ward 4" in item["area"] and item["update_count"] == 0
+    found = (await api.get("/v1/reports", params={"q": "allen"}, headers=bearer(viewer))).json()
+    assert [i["location_name"] for i in found["items"]] == ["Allen Avenue"]
+    none = (await api.get("/v1/reports", params={"status": "confirmed", "q": "allen"}, headers=bearer(viewer))).json()
+    assert none["items"] == []
+
+
+async def test_only_super_admins_set_admin_passwords(web, db, monkeypatch):  # noqa: F811
+    calls = []
+
+    async def update(user_id, body):
+        calls.append((user_id, body))
+        return True
+
+    monkeypatch.setattr(auth, "admin_update_user", update)
+    other_admin = await user(db, role="admin")
+    form = {"new_password": "a-strong-password-1", "confirm_password": "a-strong-password-1",
+            "require_change": "true"}
+    csrf = signed_in(web, await user(db, role="admin"))
+    denied = await web.post(f"/admin/staff/{other_admin}/password", data={**form, "csrf": csrf})
+    assert denied.status_code == 403 and calls == []
+
+    web.cookies.clear()
+    csrf = signed_in(web, await user(db, role="super_admin"))
+    done = await web.post(f"/admin/staff/{other_admin}/password", data={**form, "csrf": csrf})
+    assert done.status_code == 200 and "Password changed" in done.text
+    assert calls[0][1] == {"password": "a-strong-password-1", "app_metadata": {"must_change_password": True}}
+    assert await db.fetchval("SELECT session_version FROM profiles WHERE id = $1", other_admin) == 1
+    entry = await db.fetchval(
+        "SELECT metadata::text FROM audit_log WHERE action = 'staff_password_set' "
+        "ORDER BY chain_seq DESC LIMIT 1"
+    )
+    assert "a-strong-password-1" not in entry
+
+    mismatch = await web.post(
+        f"/admin/staff/{other_admin}/password",
+        data={**form, "confirm_password": "something-else-12", "csrf": csrf},
+    )
+    assert "do not match" in mismatch.text and len(calls) == 1
+

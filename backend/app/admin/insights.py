@@ -26,6 +26,7 @@ ACTION_LABELS = {
     "staff_invite": "Invited staff",
     "staff_scope": "Changed staff areas",
     "staff_password_reset": "Reset a staff password",
+    "staff_password_set": "Set a staff password",
     "staff_sign_out_everywhere": "Signed staff out everywhere",
     "staff_disable": "Disabled a staff account",
     "staff_enable": "Enabled a staff account",

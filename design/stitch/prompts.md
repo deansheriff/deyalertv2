@@ -118,3 +118,5 @@ All on design system `assets/14479210342777017401`. Each brief asked for the dar
 | DA-M39 | Contact support: category chips, message, device info checkbox, your conversations. |
 | DA-M40 | Feed with an announcement card and inline verifier updates. |
 | DA-M41 | Become a verifier: what verifiers do, form, pending state. |
+| DA-M42 | All reports tab replacing the map: search, filter chips, cards with area, verification, follow-up count and distance, load more. |
+| DA-M43 | Incident updates split into official updates and community follow-ups, with an "Add a follow-up" sheet (quick chips, text, moderation note). |
